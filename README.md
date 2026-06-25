@@ -14,6 +14,14 @@ It's compatible with all supported versions for SharePoint OnPremises (2016 to S
 
 [Download the latest release, Click here!](https://github.com/luigilink/spsusersync/releases/latest)
 
+## Requirements
+
+- SharePoint Server **2016**, **2019**, or **Subscription Edition**
+- **PowerShell 5.1** (Windows PowerShell) on every SharePoint server in scope
+- **Farm Administrator** rights for the account running the scripts
+- Network reachability to every Active Directory forest you want to synchronize (LDAP/389 or LDAPS/636)
+- Farm property bags `APP_CODE` and `ENV_NAME` defined at farm level (used to route the generated JSON between application farms and the User Profile Service farm)
+
 ## Documentation
 
 For detailed usage, configuration, and getting started information, visit the [SPSUserSync Wiki](https://github.com/luigilink/spsusersync/wiki)

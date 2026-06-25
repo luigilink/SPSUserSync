@@ -30,3 +30,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - .github/ISSUE_TEMPLATE/1_bug_report.yml
   - Align version dropdown with current project versions (1.0.x)
   - Align PowerShell version options with supported runtimes (5.1, 7.x)
+- README.md
+  - Add Requirements section (SharePoint Server 2016/2019/SE, PowerShell 5.1, Farm Admin, AD reachability, farm property bags)
