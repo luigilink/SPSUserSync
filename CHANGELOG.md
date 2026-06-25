@@ -33,3 +33,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Align PowerShell version options with supported runtimes (5.1, 7.x)
 - README.md
   - Add Requirements section (SharePoint Server 2016/2019/SE, PowerShell 5.1, Farm Admin, AD reachability, farm property bags)
+- CODE_OF_CONDUCT.md
+  - Set the enforcement contact to the project maintainer's GitHub profile (@luigilink)

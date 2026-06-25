@@ -27,5 +27,7 @@
   - Align version and PowerShell dropdown options with the project
 - README.md
   - Add Requirements section (SharePoint Server 2016/2019/SE, PowerShell 5.1, Farm Admin, AD reachability, farm property bags)
+- CODE_OF_CONDUCT.md
+  - Set the enforcement contact to the project maintainer's GitHub profile (@luigilink)
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)
