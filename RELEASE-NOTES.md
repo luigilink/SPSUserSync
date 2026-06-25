@@ -22,5 +22,7 @@
 - .gitignore
   - Add patterns for runtime logs and local configuration files
   - Prevent accidental commit of credentials and secrets
+- .github/ISSUE_TEMPLATE/1_bug_report.yml
+  - Align version and PowerShell dropdown options with the project
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)
