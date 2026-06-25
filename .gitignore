@@ -1,0 +1,13 @@
+# Logs
+logs
+*.log
+
+# OSX
+.DS_Store
+
+# Visual Studio files
+.vscode/
+.ntvs_analysis.dat
+.vs
+bin
+obj
