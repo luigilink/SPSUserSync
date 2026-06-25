@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add RELEASE-NOTES.md file
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
+- Add SECURITY.md file
 
 ### Changed
 

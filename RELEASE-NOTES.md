@@ -16,6 +16,7 @@
 - Add RELEASE-NOTES.md file
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
+- Add SECURITY.md file
 
 ### Changed
 
