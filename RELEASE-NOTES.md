@@ -17,4 +17,10 @@
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
 
+### Changed
+
+- .gitignore
+  - Add patterns for runtime logs and local configuration files
+  - Prevent accidental commit of credentials and secrets
+
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)

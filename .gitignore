@@ -1,13 +1,29 @@
-# Logs
+# Logs and runtime artifacts
 logs
+**/Logs/
 *.log
+*_errlog.xml
+
+# Local configuration and secrets (never commit credentials)
+config/credentials.psd1
+config/ad-domains.psd1
+config/*.local.psd1
 
 # OSX
 .DS_Store
 
-# Visual Studio files
+# Visual Studio Code
 .vscode/
+
+# Visual Studio
 .ntvs_analysis.dat
 .vs
 bin
 obj
+
+# JetBrains (Rider / PowerShell plugin)
+.idea/
+
+# Pester / PowerShell test artifacts
+*.coverage.xml
+*.testResults.xml

@@ -19,3 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add RELEASE-NOTES.md file
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
+
+### Changed
+
+- .gitignore
+  - Add patterns for runtime logs (`**/Logs/`, `*_errlog.xml`)
+  - Add patterns for local configuration files and secrets (`config/credentials.psd1`, `config/ad-domains.psd1`, `config/*.local.psd1`)
+  - Add patterns for JetBrains IDE (`.idea/`)
+  - Add patterns for Pester test artifacts
