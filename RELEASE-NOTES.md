@@ -17,6 +17,7 @@
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
 - Add SECURITY.md file
+- Wiki documentation (`wiki/Home.md`, `wiki/Getting-Started.md`, `wiki/Configuration.md`, `wiki/Usage.md`) auto-synced to the GitHub Wiki by the existing `wiki.yml` workflow.
 
 ### Changed
 
@@ -53,5 +54,11 @@
 ### Added
 
 - `.github/workflows/release.yml` — automated release: packages `src/` and publishes a GitHub Release with `RELEASE-NOTES.md` as body, triggered by pushing a `v*` tag.
+
+### Changed (post-commit polish)
+
+- README.md slimmed down to badges + short description + Quick links. Detailed Requirements / Usage / Configuration content moved to the Wiki.
+- README.md: fix Code of Conduct badge link casing (`CODE_OF_CONDUCT.md`).
+- SECURITY.md: replace the obsolete `APP_CODE` / `ENV_NAME` farm property bag reference with a broader description of the values that must never be committed.
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)

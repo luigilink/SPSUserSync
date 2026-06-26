@@ -44,10 +44,11 @@ This toolkit interacts with multiple Active Directory forests and may handle ser
 
 **Never commit any of the following to a public or private repository:**
 
-- LDAP bind account passwords
-- Service account passwords or NTLM hashes
-- Production AD domain controller names, IPs, or internal URLs
-- Customer-specific values for the farm property bags `APP_CODE` and `ENV_NAME`
+- LDAP bind account passwords (plain or NTLM hashes)
+- DPAPI-encrypted SecureString values produced by `ConvertFrom-SecureString` (they look opaque but are decryptable by the same user account on the same machine)
+- Production Active Directory domain controller names, LDAP paths, or internal IPs
+- Internal SharePoint server hostnames and URLs (e.g. `MasterVM`, `MySiteUrl`, `RemoteJsonPath` values)
+- Any customer-specific value placed in your real `src/config/*.psd1` files (`ad-domains.psd1`, `secrets.psd1`, `sync-settings.psd1`)
 
 The project's `.gitignore` excludes the following paths by default:
 

@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
 - Add SECURITY.md file
+- Wiki documentation under `wiki/` (rendered by the existing `wiki.yml` workflow):
+  - `wiki/Home.md` — landing page, project overview, when to use SPSUserSync, architecture diagram
+  - `wiki/Getting-Started.md` — prerequisites, installation, first-time configuration, first run, verification
+  - `wiki/Configuration.md` — detailed reference for `ad-domains.psd1`, `secrets.psd1`, `sync-settings.psd1`
+  - `wiki/Usage.md` — running and scheduling both scripts, Event Log filters, troubleshooting
 
 ### Changed
 
@@ -88,3 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - .github/workflows/release.yml — packages `src/` into `SPSUserSync-vX.Y.Z.zip` and publishes a GitHub Release using `RELEASE-NOTES.md` as the body, triggered by pushing a `v*` tag.
+
+### Changed (post-commit polish)
+
+- README.md slimmed down to badges + short description + Quick links. Detailed Requirements / Usage / Configuration content moved to the Wiki for easier maintenance.
+- README.md: fix `CODE_OF_CONDUCT.md` badge link (the file is uppercased on disk; the lowercase link would 404 on case-sensitive hosts).
+- SECURITY.md: replace the obsolete `APP_CODE` / `ENV_NAME` farm property bag reference with a broader description of the customer-specific values that must never be committed (server hostnames, MySite URLs, real `src/config/*.psd1` values, DPAPI-encrypted SecureString values).
