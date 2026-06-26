@@ -51,10 +51,11 @@ This toolkit interacts with multiple Active Directory forests and may handle ser
 
 The project's `.gitignore` excludes the following paths by default:
 
-- `config/credentials.psd1`
-- `config/ad-domains.psd1`
-- `config/*.local.psd1`
+- `src/config/secrets.psd1`
+- `src/config/ad-domains.psd1`
+- `src/config/sync-settings.psd1`
+- `src/config/*.local.psd1`
 
-Always review the output of `git status` before any `git push`, especially after editing files under `config/`.
+Always review the output of `git status` before any `git push`, especially after editing files under `src/config/`.
 
 If you discover credentials inadvertently committed to this repository, please report it via the form above and **rotate the affected credentials immediately**.

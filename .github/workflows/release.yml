@@ -1,0 +1,38 @@
+# SPSUserSync CI Release workflow
+# Triggered by pushing a v* tag (e.g. v1.0.0). Packages the src/ folder into
+# a ZIP and publishes a GitHub Release using RELEASE-NOTES.md as the body.
+
+name: SPSUserSync CI Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create ZIP file of src
+        run: |
+          zip_name="SPSUserSync-${{ github.ref_name }}.zip"
+          zip -r "$zip_name" src/
+        shell: bash
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: false
+          prerelease: false
+          body_path: RELEASE-NOTES.md
+          files: |
+            LICENSE
+            SPSUserSync-${{ github.ref_name }}.zip

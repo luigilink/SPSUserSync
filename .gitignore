@@ -5,9 +5,10 @@ logs
 *_errlog.xml
 
 # Local configuration and secrets (never commit credentials)
-config/credentials.psd1
-config/ad-domains.psd1
-config/*.local.psd1
+src/config/secrets.psd1
+src/config/ad-domains.psd1
+src/config/sync-settings.psd1
+src/config/*.local.psd1
 
 # OSX
 .DS_Store
