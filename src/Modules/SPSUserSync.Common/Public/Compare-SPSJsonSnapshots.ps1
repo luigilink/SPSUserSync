@@ -1,4 +1,4 @@
-function Compare-SPSJsonSnapshots {
+﻿function Compare-SPSJsonSnapshots {
     <#
         .SYNOPSIS
         Compares the record count of two JSON snapshots and flags an abnormal drop.

@@ -1,4 +1,4 @@
-function Get-SPSADConnection {
+﻿function Get-SPSADConnection {
     <#
         .SYNOPSIS
         Builds a DirectorySearcher pre-configured for a given AD domain and account.

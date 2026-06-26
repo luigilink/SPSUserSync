@@ -1,4 +1,4 @@
-<#
+﻿<#
     .SYNOPSIS
     Reconciles the SharePoint Server User Profile Service Application against
     a JSON snapshot produced by SPSyncUserInfoList.ps1.

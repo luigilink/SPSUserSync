@@ -1,4 +1,4 @@
-@{
+﻿@{
     RootModule        = 'SPSUserSync.Common.psm1'
     ModuleVersion     = '1.0.0'
     GUID              = '97e2ce6d-509f-4916-846e-da2d5780765e'

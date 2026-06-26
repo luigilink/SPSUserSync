@@ -1,4 +1,4 @@
-# =====================================================================================
+﻿# =====================================================================================
 # SPSUserSync - Active Directory domain configuration (example)
 #
 # Copy this file to ad-domains.psd1 and edit it for your environment. The real

@@ -1,4 +1,4 @@
-<#
+﻿<#
     .SYNOPSIS
     Generates a JSON snapshot of every SharePoint Server site collection user
     enriched with the matching Active Directory attributes.

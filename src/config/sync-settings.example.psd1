@@ -1,4 +1,4 @@
-# =====================================================================================
+﻿# =====================================================================================
 # SPSUserSync - Sync settings (example)
 #
 # Copy this file to sync-settings.psd1 and edit the values for your target

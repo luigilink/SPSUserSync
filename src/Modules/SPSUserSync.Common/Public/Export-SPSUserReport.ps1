@@ -1,4 +1,4 @@
-function Export-SPSUserReport {
+﻿function Export-SPSUserReport {
     <#
         .SYNOPSIS
         Generates a self-contained HTML report from an SPSUserSync JSON dataset.
@@ -32,7 +32,7 @@ function Export-SPSUserReport {
         In-memory array of records to report on.
 
         .PARAMETER ReportType
-        'UserInfoList' or 'UserProfile' — drives the summary cards and table columns.
+        'UserInfoList' or 'UserProfile' - drives the summary cards and table columns.
 
         .PARAMETER OutputFile
         Destination path of the generated .html file.
@@ -144,13 +144,13 @@ function Export-SPSUserReport {
         $topDomains = $domainNames | Group-Object | Sort-Object Count -Descending | Select-Object -First 10
 
         $cardsHtml = @(
-            (New-SPSReportCard -Value $total -Label 'Total users')
-            (New-SPSReportCard -Value $withEmail -Label 'With email')
-            (New-SPSReportCard -Value $withoutEmail -Label 'Without email')
+            (Get-SPSReportCardHtml -Value $total -Label 'Total users')
+            (Get-SPSReportCardHtml -Value $withEmail -Label 'With email')
+            (Get-SPSReportCardHtml -Value $withoutEmail -Label 'Without email')
         ) -join ''
 
-        $listsHtml = (New-SPSReportTopList -Title 'Top countries' -Groups $topCountries) +
-                     (New-SPSReportTopList -Title 'Top AD domains' -Groups $topDomains)
+        $listsHtml = (Get-SPSReportTopListHtml -Title 'Top countries' -Groups $topCountries) +
+                     (Get-SPSReportTopListHtml -Title 'Top AD domains' -Groups $topDomains)
         $summaryInner = "<div class=`"cards`">$cardsHtml</div><div class=`"lists`">$listsHtml</div>"
     }
     else {
@@ -165,10 +165,10 @@ function Export-SPSUserReport {
         $total    = $records.Count
         $byStatus = $records | Group-Object -Property Status | Sort-Object Count -Descending
 
-        $cards = @( (New-SPSReportCard -Value $total -Label 'Total processed') )
+        $cards = @( (Get-SPSReportCardHtml -Value $total -Label 'Total processed') )
         foreach ($group in $byStatus) {
             $statusLabel = if ([string]::IsNullOrEmpty($group.Name)) { '(none)' } else { $group.Name }
-            $cards += (New-SPSReportCard -Value $group.Count -Label $statusLabel)
+            $cards += (Get-SPSReportCardHtml -Value $group.Count -Label $statusLabel)
         }
         $summaryInner = "<div class=`"cards`">$($cards -join '')</div>"
     }

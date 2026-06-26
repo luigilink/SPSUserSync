@@ -1,4 +1,4 @@
-function Get-SPSSecret {
+﻿function Get-SPSSecret {
     <#
         .SYNOPSIS
         Loads secrets.psd1 and returns a PSCredential for the requested key.
@@ -28,6 +28,8 @@ function Get-SPSSecret {
         $cred = Get-SPSSecret -CredentialKey 'fabrikam'
     #>
     [CmdletBinding()]
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'CredentialKey',
+        Justification = 'CredentialKey is a lookup key into secrets.psd1, not a password. The actual secret is decrypted from a DPAPI SecureString and returned as a PSCredential.')]
     [OutputType([System.Management.Automation.PSCredential])]
     param
     (

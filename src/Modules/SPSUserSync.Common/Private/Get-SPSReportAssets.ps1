@@ -1,4 +1,4 @@
-function New-SPSReportCard {
+﻿function Get-SPSReportCardHtml {
     <#
         .SYNOPSIS
         Builds the HTML for one summary "card" (a big number plus a label).
@@ -20,7 +20,7 @@ function New-SPSReportCard {
     return "<div class=`"card`"><div class=`"card-value`">$encValue</div><div class=`"card-label`">$encLabel</div></div>"
 }
 
-function New-SPSReportTopList {
+function Get-SPSReportTopListHtml {
     <#
         .SYNOPSIS
         Builds the HTML for a "Top N" list rendered as a small two-column table.

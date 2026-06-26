@@ -1,4 +1,4 @@
-function Get-SPSJsonRecordCount {
+﻿function Get-SPSJsonRecordCount {
     <#
         .SYNOPSIS
         Returns the number of records in a JSON snapshot file.

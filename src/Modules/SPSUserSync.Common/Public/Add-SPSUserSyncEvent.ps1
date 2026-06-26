@@ -1,4 +1,4 @@
-function Add-SPSUserSyncEvent {
+﻿function Add-SPSUserSyncEvent {
     <#
         .SYNOPSIS
         Writes an event to the dedicated SPSUserSync Windows Event Log.

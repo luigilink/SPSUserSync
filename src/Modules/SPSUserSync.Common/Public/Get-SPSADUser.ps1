@@ -1,4 +1,4 @@
-function Get-SPSADUser {
+﻿function Get-SPSADUser {
     <#
         .SYNOPSIS
         Resolves a SharePoint user login to the corresponding Active Directory entry.
