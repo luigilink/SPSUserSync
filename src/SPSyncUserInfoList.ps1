@@ -309,12 +309,65 @@ else {
 }
 $pathUserDeletedFile = Join-Path -Path $ctx.LogFolder -ChildPath ('SPSyncUserDeletedList' + (Get-Date -Format yyyyMMdd-HHmm) + '.json')
 
+# New 1.1.0 settings with backward-compatible defaults (older sync-settings.psd1 may omit them)
+$historyRetention = if ($null -ne $settings.JsonHistoryRetentionDays) { $settings.JsonHistoryRetentionDays } else { 90 }
+$dropThreshold    = if ($null -ne $settings.JsonDropThresholdPercent) { $settings.JsonDropThresholdPercent } else { 20 }
+$pathHistoryFolder = Join-Path -Path $ctx.LogFolder -ChildPath 'history'
+
+# Archive the previous snapshot before it is overwritten, so we keep a history and
+# can detect an abnormal drop in the user count after regeneration.
+$previousSnapshot = Backup-SPSJsonFile -Path $pathJsonFile -HistoryFolder $pathHistoryFolder
+if ($null -ne $previousSnapshot) {
+    Write-Output "Previous snapshot archived to: $previousSnapshot"
+}
+
 # Generate the JSON
 if ([string]::IsNullOrEmpty($FilterUrl)) {
     Get-SPSUniqueUsers -Settings $settings -JsonFilePath $pathJsonFile -DeletedJsonFilePath $pathUserDeletedFile
 }
 else {
     Get-SPSUniqueUsers -FilterUrl $FilterUrl -Settings $settings -JsonFilePath $pathJsonFile -DeletedJsonFilePath $pathUserDeletedFile
+}
+
+# Compare the fresh snapshot against the previous one and warn on an abnormal drop
+if ($null -ne $previousSnapshot) {
+    $comparison = Compare-SPSJsonSnapshots -CurrentPath $pathJsonFile -PreviousPath $previousSnapshot -DropThresholdPercent $dropThreshold
+    Write-Output "Snapshot comparison: previous=$($comparison.PreviousCount) current=$($comparison.CurrentCount) delta=$($comparison.Delta) drop=$($comparison.DropPercent)%"
+    if ($comparison.IsAnomalous) {
+        $warnMessage = @"
+Abnormal drop detected in the generated user snapshot.
+Previous count: $($comparison.PreviousCount)
+Current count: $($comparison.CurrentCount)
+Drop: $($comparison.DropPercent)% (threshold: $($comparison.ThresholdPercent)%)
+Previous snapshot: $previousSnapshot
+Current snapshot: $pathJsonFile
+Review before SPSyncUserProfile.ps1 consumes this file.
+"@
+        Add-SPSUserSyncEvent -Message $warnMessage -Source 'Compare-SPSJsonSnapshots' -EntryType 'Warning'
+    }
+}
+
+# Rotate archived snapshots in the history folder
+Clear-SPSLogFolder -Path $pathHistoryFolder -Retention $historyRetention -Extension '*.json'
+
+# Generate the HTML report
+$generateHtml = if ($null -ne $settings.GenerateHtmlReport) { $settings.GenerateHtmlReport } else { $true }
+if ($generateHtml) {
+    try {
+        $reportFile = Join-Path -Path $ctx.LogFolder -ChildPath ('SPSyncUserInfoListReport-' + (Get-Date -Format yyyyMMdd-HHmm) + '.html')
+        $null = Export-SPSUserReport -InputFile $pathJsonFile -ReportType 'UserInfoList' -OutputFile $reportFile `
+            -EnvName $settings.EnvName -AppCode $appCode -ClaimPrefix $settings.ClaimPrefix -Version $ctx.Version
+        Write-Output "HTML report written to: $reportFile"
+        Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $settings.LogRetentionDays -Extension '*.html'
+    }
+    catch {
+        $catchMessage = @"
+Failed to generate the HTML report
+Source: $pathJsonFile
+Exception: $_
+"@
+        Add-SPSUserSyncEvent -Message $catchMessage -Source 'Export-SPSUserReport' -EntryType 'Warning'
+    }
 }
 
 # Copy JSON to the master VM of the User Profile Service farm

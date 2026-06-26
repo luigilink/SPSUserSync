@@ -5,6 +5,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- JSON snapshot history and anomaly detection (`SPSyncUserInfoList.ps1`):
+  - `Backup-SPSJsonFile` — archives the previous `SPSyncUserInfoListUserList.json` to `Logs\history\` with a timestamp before each regeneration.
+  - `Compare-SPSJsonSnapshots` — pure function returning `CurrentCount`, `PreviousCount`, `Delta`, `DropPercent`, `ThresholdPercent`, `IsAnomalous`.
+  - The script now archives the previous snapshot, regenerates, then raises a **Warning** in the SPSUserSync Event Log when the user count drops by at least `JsonDropThresholdPercent` (helps catch an unreachable AD forest or a bad exclusion before the UPA reconciliation runs).
+  - History snapshots are rotated using the existing `Clear-SPSLogFolder` with `-Extension '*.json'`.
+- New settings in `sync-settings.example.psd1` (backward-compatible defaults applied when absent):
+  - `JsonHistoryRetentionDays` (default 90)
+  - `JsonDropThresholdPercent` (default 20)
+  - `GenerateHtmlReport` (default `$true`)
+- Self-contained HTML reporting:
+  - `Export-SPSUserReport` — generates a single dependency-free HTML report (no CDN, works offline) for either dataset via `-ReportType UserInfoList|UserProfile`. Summary cards plus an interactive table (live search, column sort, pagination) rendered by embedded vanilla JavaScript. All AD-sourced values are HTML-encoded and rendered via `textContent`, so names/emails cannot inject markup.
+  - `SPSyncUserInfoList.ps1` writes `SPSyncUserInfoListReport-*.html` (total users, email coverage, top countries, top AD domains).
+  - `SPSyncUserProfile.ps1` writes `SPSyncUserProfileReport-*.html` (counts by Status: CREATE / UPDATE / INFO / UNKNOWN_USER).
+  - Reports are rotated with the existing `Clear-SPSLogFolder` using `-Extension '*.html'`, and can be disabled by setting `GenerateHtmlReport = $false`.
+
 ## [1.0.0] - 2026-06-26
 
 ### Added

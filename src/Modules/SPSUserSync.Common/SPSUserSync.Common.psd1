@@ -11,7 +11,10 @@
 
     FunctionsToExport = @(
         'Add-SPSUserSyncEvent'
+        'Backup-SPSJsonFile'
         'Clear-SPSLogFolder'
+        'Compare-SPSJsonSnapshots'
+        'Export-SPSUserReport'
         'Get-SPSADConnection'
         'Get-SPSADUser'
         'Get-SPSSyncSetting'
