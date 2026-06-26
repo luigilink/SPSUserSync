@@ -1,4 +1,4 @@
-# =====================================================================================
+﻿# =====================================================================================
 # SPSUserSync - Secrets configuration (example)
 #
 # Copy this file to secrets.psd1 and replace the placeholders with real values. The

@@ -131,6 +131,11 @@ Environment-specific knobs read by both scripts.
 
     LogRetentionDays    = 90
     UpaLogRetentionDays = 30
+
+    # JSON snapshot history and reporting (1.1.0+)
+    JsonHistoryRetentionDays = 90
+    JsonDropThresholdPercent = 20
+    GenerateHtmlReport       = $true
 }
 ```
 
@@ -148,8 +153,11 @@ Environment-specific knobs read by both scripts.
 | `RemoteJsonPath` | `SPSyncUserInfoList` | UNC template used to copy the JSON to the UPA master server. `{0}` = `MasterVM`, `{1}` = `AppCode`. |
 | `LogRetentionDays` | `SPSyncUserInfoList` | Days of `*.log` history to keep next to the script. |
 | `UpaLogRetentionDays` | `SPSyncUserProfile` | Same, for the UPA master server. |
+| `JsonHistoryRetentionDays` | `SPSyncUserInfoList` | **(1.1.0+)** Days of timestamped JSON snapshots kept under `Logs\history\`. Defaults to 90 when absent. |
+| `JsonDropThresholdPercent` | `SPSyncUserInfoList` | **(1.1.0+)** A snapshot losing at least this percentage of records versus the previous one raises a Warning in the SPSUserSync Event Log. Defaults to 20 when absent. |
+| `GenerateHtmlReport` | both | **(1.1.0+)** When `$true`, each run also writes a self-contained HTML report under `Logs\`. Defaults to `$true` when absent. |
 
-### Customizing the exclusion list
+> **Backward compatibility:** the three `1.1.0+` keys are optional. An existing `sync-settings.psd1` created for 1.0.0 keeps working unchanged; the documented defaults apply until you add the keys.
 
 `ExcludedUserLogins` matches **exactly**. `ExcludedUserLoginPatterns` uses PowerShell wildcards (`*`, `?`). The two are OR'd together: a SPUser whose `UserLogin` matches **either** is skipped.
 

@@ -1,4 +1,4 @@
-# =====================================================================================
+﻿# =====================================================================================
 # SPSUserSync - Sync settings (example)
 #
 # Copy this file to sync-settings.psd1 and edit the values for your target
@@ -35,4 +35,13 @@
 
     LogRetentionDays    = 90
     UpaLogRetentionDays = 30
+
+    # JSON snapshot history and reporting (added in 1.1.0)
+    # JsonHistoryRetentionDays : days of timestamped JSON snapshots kept under Logs\history
+    # JsonDropThresholdPercent : a snapshot losing at least this % of records vs the
+    #                            previous one raises a Warning in the SPSUserSync Event Log
+    # GenerateHtmlReport       : when $true, each run also writes a self-contained HTML report
+    JsonHistoryRetentionDays = 90
+    JsonDropThresholdPercent = 20
+    GenerateHtmlReport       = $true
 }

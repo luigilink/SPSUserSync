@@ -1,4 +1,4 @@
-function Get-SPSSyncSetting {
+﻿function Get-SPSSyncSetting {
     <#
         .SYNOPSIS
         Loads and caches the sync-settings.psd1 file.

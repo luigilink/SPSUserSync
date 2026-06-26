@@ -1,4 +1,4 @@
-function Get-SPSConfigRoot {
+﻿function Get-SPSConfigRoot {
     <#
         .SYNOPSIS
         Resolves the default location of the config folder.

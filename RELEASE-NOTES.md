@@ -1,64 +1,36 @@
 # SPSUserSync - Release Notes
 
-## [1.0.0] - 2026-06-26
+## [1.1.0] - 2026-06-26
 
 ### Added
 
-- README.md
-  - Add code_of_conduct.md badge
-- Add CODE_OF_CONDUCT.md file
-- Add Issue Templates files:
-  - 1_bug_report.yml
-  - 2_feature_request.yml
-  - 3_documentation_request.yml
-  - 4_improvement_request.yml
-  - config.yml
-- Add RELEASE-NOTES.md file
-- Add CHANGELOG.md file
-- Add CONTRIBUTING.md file
-- Add SECURITY.md file
-- Wiki documentation (`wiki/Home.md`, `wiki/Getting-Started.md`, `wiki/Configuration.md`, `wiki/Usage.md`, `wiki/Release-Process.md`, `wiki/_Sidebar.md`) auto-synced to the GitHub Wiki by the existing `wiki.yml` workflow. The `_Sidebar.md` renders the navigation on every wiki page; `Release-Process.md` documents the maintainer checklist for shipping a new version.
+- JSON snapshot history and anomaly detection (`SPSyncUserInfoList.ps1`):
+  - `Backup-SPSJsonFile` — archives the previous `SPSyncUserInfoListUserList.json` to `Logs\history\` with a timestamp before each regeneration.
+  - `Compare-SPSJsonSnapshots` — pure function returning `CurrentCount`, `PreviousCount`, `Delta`, `DropPercent`, `ThresholdPercent`, `IsAnomalous`.
+  - The script now archives the previous snapshot, regenerates, then raises a **Warning** in the SPSUserSync Event Log when the user count drops by at least `JsonDropThresholdPercent` (helps catch an unreachable AD forest or a bad exclusion before the UPA reconciliation runs).
+  - History snapshots are rotated using the existing `Clear-SPSLogFolder` with `-Extension '*.json'`.
+- New settings in `sync-settings.example.psd1` (backward-compatible defaults applied when absent):
+  - `JsonHistoryRetentionDays` (default 90)
+  - `JsonDropThresholdPercent` (default 20)
+  - `GenerateHtmlReport` (default `$true`)
+- Self-contained HTML reporting:
+  - `Export-SPSUserReport` — generates a single dependency-free HTML report (no CDN, works offline) for either dataset via `-ReportType UserInfoList|UserProfile`. Summary cards plus an interactive table (live search, column sort, pagination) rendered by embedded vanilla JavaScript. All AD-sourced values are HTML-encoded and rendered via `textContent`, so names/emails cannot inject markup.
+  - `SPSyncUserInfoList.ps1` writes `SPSyncUserInfoListReport-*.html` (total users, email coverage, top countries, top AD domains).
+  - `SPSyncUserProfile.ps1` writes `SPSyncUserProfileReport-*.html` (counts by Status: CREATE / UPDATE / INFO / UNKNOWN_USER).
+  - Reports are rotated with the existing `Clear-SPSLogFolder` using `-Extension '*.html'`, and can be disabled by setting `GenerateHtmlReport = $false`.
+- Pester test suite under `tests/` (39 tests, cross-platform):
+  - `SPSUserSync.Common.Tests.ps1` — module import, manifest validity, public/private surface, parameter contracts
+  - `Compare-SPSJsonSnapshots.Tests.ps1` — drop detection, threshold edges, growth, empty-previous
+  - `Backup-SPSJsonFile.Tests.ps1` — timestamped copy, copy-not-move, folder creation, missing source, content preservation
+  - `Export-SPSUserReport.Tests.ps1` — both report types, empty dataset, and an HTML-injection safety test
+  - `Private.Tests.ps1` — `ConvertFrom-SPSUserLogin`, `ConvertTo-SPSHtmlEncoded`, `Get-SPSJsonRecordCount` via `InModuleScope`
+- `.github/workflows/pester.yml` — runs Pester and PSScriptAnalyzer on pull requests touching `src/`, `tests/` or the analyzer settings.
+- `PSScriptAnalyzerSettings.psd1` — analyzer configuration (Error+Warning, with `PSUseSingularNouns` disabled for the deliberately plural `Compare-SPSJsonSnapshots` / `Get-SPSUniqueUsers`).
+- `.gitattributes` and `.editorconfig` — encode the project's text conventions.
 
 ### Changed
 
-- .gitignore
-  - Add patterns for runtime logs and local configuration files
-  - Prevent accidental commit of credentials and secrets
-- .github/ISSUE_TEMPLATE/1_bug_report.yml
-  - Align version and PowerShell dropdown options with the project
-- README.md
-  - Add Requirements section (SharePoint Server 2016/2019/SE, PowerShell 5.1, Farm Admin, AD reachability, farm property bags)
-- CODE_OF_CONDUCT.md
-  - Set the enforcement contact to the project maintainer's GitHub profile (@luigilink)
-- README.md
-  - Remove obsolete reference to farm property bags (now in `config/sync-settings.psd1`)
-
-### Added
-
-- Configuration scaffolding under `src/config/` (ad-domains, secrets, sync-settings — `.example.psd1` only is versioned)
-- PowerShell module `src/Modules/SPSUserSync.Common/` with manifest, loader, and 7 public functions: `Add-SPSUserSyncEvent` (dedicated SPSUserSync Windows Event Log), `Clear-SPSLogFolder` (log rotation), `Get-SPSADConnection` (DirectorySearcher per domain), `Get-SPSADUser` / `Test-SPSADUser` (SP-to-AD lookup), `Get-SPSSyncSetting` (settings loader), `Initialize-SPSScript` (admin check, transcript, banner). Private helpers cover login parsing, config loading and SecureString DPAPI secret decryption.
-
-### Changed
-
-- src/SPSyncUserInfoList.ps1 refactored to consume the new module:
-  - All 19 AD domains, bind credentials, master VM names, MySite URLs, user-exclusion patterns and claim prefix moved out of code into `src/config/*.psd1`
-  - JSON output is now UTF-8 (fixes accents corruption)
-  - Errors funnel into the SPSUserSync Event Log instead of `*_errlog.xml` dumps
-- src/SPSyncUserProfile.ps1 refactored to consume the new module:
-  - Same module-driven cleanup as SPSyncUserInfoList.ps1
-  - Reads the input JSON explicitly as UTF-8
-  - UPA log retention configurable via `UpaLogRetentionDays`
-- Both scripts no longer carry their own version string. The single source of truth is the `ModuleVersion` field of `SPSUserSync.Common.psd1`; `Initialize-SPSScript` auto-detects it.
-- The SPSUserSync Event Log header records the SPSUserSync version and the calling script name on dedicated lines so operators can filter events by version or script directly from Event Viewer or SCOM.
-
-### Added
-
-- `.github/workflows/release.yml` — automated release: packages `src/` and publishes a GitHub Release with `RELEASE-NOTES.md` as body, triggered by pushing a `v*` tag.
-
-### Changed (post-commit polish)
-
-- README.md slimmed down to badges + short description + Quick links. Detailed Requirements / Usage / Configuration content moved to the Wiki.
-- README.md: fix Code of Conduct badge link casing (`CODE_OF_CONDUCT.md`).
-- SECURITY.md: replace the obsolete `APP_CODE` / `ENV_NAME` farm property bag reference with a broader description of the values that must never be committed.
+- All PowerShell files (`*.ps1`, `*.psm1`, `*.psd1`) are now stored as **UTF-8 with BOM** and checked out with **CRLF**, so Windows PowerShell 5.1 reads any non-ASCII content correctly instead of falling back to the ANSI code page. YAML, Markdown and JSON keep LF and no BOM.
+- Renamed two private report helpers to non-state-changing verbs (`New-SPSReportCard` -> `Get-SPSReportCardHtml`, `New-SPSReportTopList` -> `Get-SPSReportTopListHtml`) to satisfy PSScriptAnalyzer.
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)

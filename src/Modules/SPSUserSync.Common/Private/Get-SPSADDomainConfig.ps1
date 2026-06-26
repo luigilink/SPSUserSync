@@ -1,4 +1,4 @@
-function Get-SPSADDomainConfig {
+﻿function Get-SPSADDomainConfig {
     <#
         .SYNOPSIS
         Loads and caches the AD domain configuration from ad-domains.psd1.

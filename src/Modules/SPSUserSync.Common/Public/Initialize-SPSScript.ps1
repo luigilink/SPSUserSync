@@ -1,4 +1,4 @@
-function Initialize-SPSScript {
+﻿function Initialize-SPSScript {
     <#
         .SYNOPSIS
         Common bootstrap for SPSUserSync scripts: admin check, transcript, banner.

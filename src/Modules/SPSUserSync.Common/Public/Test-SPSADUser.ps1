@@ -1,4 +1,4 @@
-function Test-SPSADUser {
+﻿function Test-SPSADUser {
     <#
         .SYNOPSIS
         Returns $true when the SharePoint user login resolves to an AD entry.

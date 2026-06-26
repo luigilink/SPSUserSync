@@ -1,4 +1,4 @@
-<#
+﻿<#
     .SYNOPSIS
     Reconciles the SharePoint Server User Profile Service Application against
     a JSON snapshot produced by SPSyncUserInfoList.ps1.
@@ -324,6 +324,25 @@ if ($tbSPSUserProfileMgmt.Count -ne 0) {
     Write-Output "$($tbSPSUserProfileMgmt.Count) users added/updated in User Profile Service Application"
     $tbSPSUserProfileMgmt | ConvertTo-Json | Set-Content -Path $pathUserAddedInUSPFile -Force -Encoding UTF8
     Write-Output "Saved User Profile Management in file: $pathUserAddedInUSPFile"
+
+    # Generate the HTML report
+    $generateHtml = if ($null -ne $settings.GenerateHtmlReport) { $settings.GenerateHtmlReport } else { $true }
+    if ($generateHtml) {
+        try {
+            $reportFile = Join-Path -Path $ctx.LogFolder -ChildPath ('SPSyncUserProfileReport-' + (Get-Date -Format yyyyMMdd-HHmm) + '.html')
+            $null = Export-SPSUserReport -InputObject $tbSPSUserProfileMgmt.ToArray() -ReportType 'UserProfile' -OutputFile $reportFile `
+                -EnvName $settings.EnvName -AppCode $settings.AppCode -Version $ctx.Version
+            Write-Output "HTML report written to: $reportFile"
+            Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $upaRetention -Extension '*.html'
+        }
+        catch {
+            $catchMessage = @"
+Failed to generate the HTML report
+Exception: $_
+"@
+            Add-SPSUserSyncEvent -Message $catchMessage -Source 'Export-SPSUserReport' -EntryType 'Warning'
+        }
+    }
 }
 
 $DateEnded = Get-Date

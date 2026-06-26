@@ -1,4 +1,4 @@
-function ConvertFrom-SPSUserLogin {
+﻿function ConvertFrom-SPSUserLogin {
     <#
         .SYNOPSIS
         Parses a SharePoint claims login into its DOMAIN/Account components.
