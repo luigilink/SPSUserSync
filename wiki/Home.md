@@ -35,6 +35,7 @@ Both scripts share the **`SPSUserSync.Common`** PowerShell module: AD resolution
 - [Getting Started](Getting-Started) — prerequisites, installation, first run
 - [Configuration](Configuration) — the three `.psd1` files explained
 - [Usage](Usage) — running, scheduling, logs and troubleshooting
+- [Release Process](Release-Process) — for maintainers: how to ship a new version
 
 ## Project links
 

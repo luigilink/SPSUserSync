@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-26
+
 ### Added
 
 - README.md
@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `wiki/Getting-Started.md` — prerequisites, installation, first-time configuration, first run, verification
   - `wiki/Configuration.md` — detailed reference for `ad-domains.psd1`, `secrets.psd1`, `sync-settings.psd1`
   - `wiki/Usage.md` — running and scheduling both scripts, Event Log filters, troubleshooting
+  - `wiki/Release-Process.md` — maintainer checklist for shipping a new version (versioning policy, step-by-step release, tag-recovery procedure)
+  - `wiki/_Sidebar.md` — global navigation sidebar rendered on every wiki page
 
 ### Changed
 

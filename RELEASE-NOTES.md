@@ -1,6 +1,6 @@
 # SPSUserSync - Release Notes
 
-## [Unreleased]
+## [1.0.0] - 2026-06-26
 
 ### Added
 
@@ -17,7 +17,7 @@
 - Add CHANGELOG.md file
 - Add CONTRIBUTING.md file
 - Add SECURITY.md file
-- Wiki documentation (`wiki/Home.md`, `wiki/Getting-Started.md`, `wiki/Configuration.md`, `wiki/Usage.md`) auto-synced to the GitHub Wiki by the existing `wiki.yml` workflow.
+- Wiki documentation (`wiki/Home.md`, `wiki/Getting-Started.md`, `wiki/Configuration.md`, `wiki/Usage.md`, `wiki/Release-Process.md`, `wiki/_Sidebar.md`) auto-synced to the GitHub Wiki by the existing `wiki.yml` workflow. The `_Sidebar.md` renders the navigation on every wiki page; `Release-Process.md` documents the maintainer checklist for shipping a new version.
 
 ### Changed
 
