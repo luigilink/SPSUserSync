@@ -103,6 +103,36 @@ Every run produces a transcript file under the script's `Logs\` folder. Useful f
 
 The per-run JSON files (`SPSyncUserAddedInUSPList*.json`, `SPSyncUserDeletedList*.json`, `SPSyncUserNotAddedInUSPList*.json`) are also rotated using the same retention settings.
 
+## JSON history and anomaly detection
+
+*(SPSyncUserInfoList.ps1, 1.1.0+)*
+
+Before each regeneration, the previous `SPSyncUserInfoListUserList.json` is archived to `Logs\history\` with a timestamp (e.g. `SPSyncUserInfoListUserList-20260626-1300.json`). These snapshots are rotated using `JsonHistoryRetentionDays` (default 90).
+
+After the new snapshot is written, the script compares its record count against the archived one. If the user count drops by at least `JsonDropThresholdPercent` (default 20%), a **Warning** is written to the SPSUserSync Event Log under the source `Compare-SPSJsonSnapshots`:
+
+```
+Abnormal drop detected in the generated user snapshot.
+Previous count: 11210
+Current count: 4120
+Drop: 63,25% (threshold: 20%)
+```
+
+This is an early-warning signal: a sudden drop usually means an AD forest was unreachable during the run, or an exclusion pattern was mis-configured. Investigate before `SPSyncUserProfile.ps1` consumes the file, since a truncated snapshot would otherwise propagate to the User Profile Service Application. Growth (the snapshot getting larger) never raises a warning.
+
+## HTML reports
+
+*(both scripts, 1.1.0+)*
+
+When `GenerateHtmlReport = $true` (the default), each run also writes a self-contained HTML report under `Logs\`:
+
+- `SPSyncUserInfoListReport-YYYYMMDD-HHMM.html` — total users, email coverage, top countries and top AD domains, plus a searchable/sortable/paginated table of every user.
+- `SPSyncUserProfileReport-YYYYMMDD-HHMM.html` — counts by reconciliation `Status` (CREATE / UPDATE / INFO / UNKNOWN_USER), plus the per-account table.
+
+The reports are **dependency-free** (no CDN, no internet required) so they open on isolated SharePoint servers, and they are rotated with the same retention as the transcripts (`LogRetentionDays` / `UpaLogRetentionDays`). Set `GenerateHtmlReport = $false` to skip them.
+
+> **Privacy:** the reports embed personal data (display names, email addresses). They live in the local `Logs\` folder at the same sensitivity as the JSON snapshots — handle, share and retain them accordingly.
+
 ## Troubleshooting
 
 ### Module fails to import
