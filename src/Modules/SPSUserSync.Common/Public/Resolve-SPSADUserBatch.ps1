@@ -96,24 +96,12 @@
         $ThrottleLimit = Get-SPSThrottleLimit
     }
 
-    # Default worker: resolve one login via Get-SPSADUser and project the
-    # attributes SPSUserSync needs. Kept identical to the sequential logic in
-    # SPSyncUserInfoList.ps1 so the JSON is byte-for-byte the same.
+    # Default worker: resolve one login via Get-SPSADUser and project it through
+    # ConvertTo-SPSUserRecord, the same helper the sequential path uses, so the
+    # JSON is byte-for-byte identical whether resolution runs in parallel or not.
     if ($null -eq $ResolveScript) {
         $ResolveScript = {
             param ($UserLogin, $ConfigPath)
-
-            $record = [PSCustomObject]@{
-                UserLogin   = $UserLogin
-                DisplayName = $null
-                FirstName   = $null
-                LastName    = $null
-                Email       = $null
-                Country     = $null
-                Location    = $null
-                Resolved    = $false
-                Error       = $null
-            }
 
             try {
                 $lookupParams = @{ UserLogin = $UserLogin }
@@ -121,26 +109,21 @@
                     $lookupParams['ConfigPath'] = $ConfigPath
                 }
                 $adUser = Get-SPSADUser @lookupParams
-                if ($null -ne $adUser) {
-                    $record.Country     = "$($adUser.Properties['co'])".ToUpper()
-                    $record.Location    = "$($adUser.Properties['l'])".ToUpper()
-                    $record.FirstName   = "$($adUser.Properties['givenname'])"
-                    $record.LastName    = "$($adUser.Properties['sn'])"
-                    $record.Email       = "$($adUser.Properties['mail'])"
-                    $record.DisplayName = "$($adUser.Properties['displayname'])"
-                    if ([string]::IsNullOrEmpty($record.DisplayName) -and
-                        -not [string]::IsNullOrEmpty($record.FirstName) -and
-                        -not [string]::IsNullOrEmpty($record.LastName)) {
-                        $record.DisplayName = "$($record.FirstName) $($record.LastName)"
-                    }
-                    $record.Resolved = $true
-                }
+                ConvertTo-SPSUserRecord -UserLogin $UserLogin -AdUser $adUser
             }
             catch {
-                $record.Error = $_.Exception.Message
+                [PSCustomObject]@{
+                    UserLogin   = $UserLogin
+                    DisplayName = $null
+                    FirstName   = $null
+                    LastName    = $null
+                    Email       = $null
+                    Country     = $null
+                    Location    = $null
+                    Resolved    = $false
+                    Error       = $_.Exception.Message
+                }
             }
-
-            $record
         }
 
         # Only the default worker needs the module imported in each runspace.

@@ -136,6 +136,10 @@ Environment-specific knobs read by both scripts.
     JsonHistoryRetentionDays = 90
     JsonDropThresholdPercent = 20
     GenerateHtmlReport       = $true
+
+    # Parallel AD resolution (1.3.0+)
+    ParallelADResolution     = $false
+    MaxParallelADQueries     = 0
 }
 ```
 
@@ -156,6 +160,8 @@ Environment-specific knobs read by both scripts.
 | `JsonHistoryRetentionDays` | `SPSyncUserInfoList` | **(1.1.0+)** Days of timestamped JSON snapshots kept under `Logs\history\`. Defaults to 90 when absent. |
 | `JsonDropThresholdPercent` | `SPSyncUserInfoList` | **(1.1.0+)** A snapshot losing at least this percentage of records versus the previous one raises a Warning in the SPSUserSync Event Log. Defaults to 20 when absent. |
 | `GenerateHtmlReport` | both | **(1.1.0+)** When `$true`, each run also writes a self-contained HTML report under `Logs\`. Defaults to `$true` when absent. |
+| `ParallelADResolution` | `SPSyncUserInfoList` | **(1.3.0+)** When `$true`, the unique user logins are resolved against AD concurrently via a RunspacePool. Worth enabling on large multi-forest farms where the LDAP round-trip dominates; leave `$false` on small farms (the per-runspace module-import overhead is not amortized). The generated JSON is identical either way. Defaults to `$false` when absent. |
+| `MaxParallelADQueries` | `SPSyncUserInfoList` | **(1.3.0+)** Maximum concurrent AD lookups when `ParallelADResolution` is `$true`. `0` (or absent) lets the toolkit pick a value from the CPU count (cap 10 on 8+ logical CPUs). |
 
 > **Backward compatibility:** the three `1.1.0+` keys are optional. An existing `sync-settings.psd1` created for 1.0.0 keeps working unchanged; the documented defaults apply until you add the keys.
 

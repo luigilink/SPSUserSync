@@ -14,6 +14,7 @@
         'Backup-SPSJsonFile'
         'Clear-SPSLogFolder'
         'Compare-SPSJsonSnapshots'
+        'ConvertTo-SPSUserRecord'
         'Export-SPSUserReport'
         'Get-SPSADConnection'
         'Get-SPSADUser'

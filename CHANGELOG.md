@@ -5,6 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional parallel AD resolution in `SPSyncUserInfoList.ps1` for large multi-forest farms. When `ParallelADResolution = $true` (new setting, default `$false`), the unique user logins are resolved against Active Directory concurrently through a RunspacePool (Windows PowerShell 5.1 compatible, no `ForEach-Object -Parallel` needed), with the degree of parallelism from `MaxParallelADQueries` (0 = auto from the CPU count). Two new public helpers back it: `Resolve-SPSADUserBatch` (the RunspacePool resolver) and `Get-SPSThrottleLimit` (CPU-based default). A measured ~8x speedup on a 40-user mock with 100 ms LDAP latency.
+- `ConvertTo-SPSUserRecord` (public) — single projection from a `Get-SPSADUser` result to the flat SPSUserSync record (DisplayName/FirstName/LastName/Email/Country/Location), shared by both the sequential path and the parallel worker so the generated JSON is byte-for-byte identical regardless of `ParallelADResolution`.
+
+### Changed
+
+- `SPSyncUserInfoList.ps1` now resolves each **unique** login against AD exactly once. Previously a user present in N webs was looked up N times; the user-collection pass is now separated from the AD-resolution pass (and the JSON-building pass), which also speeds up the default sequential mode on farms where users appear in many sites. The user-removal walk (`Set-SPUser` / `Remove-SPUser`) is unchanged and still runs per web.
+
 ## [1.2.1] - 2026-06-28
 
 ### Fixed
