@@ -234,7 +234,7 @@ Clear-Host
 
 # Bootstrap: admin check, transcript, banner (version read from the module manifest)
 try {
-    $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserProfile'
+    $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserProfile' -ScriptRoot $PSScriptRoot
 }
 catch {
     Write-Error -Message $_.Exception.Message
