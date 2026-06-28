@@ -280,6 +280,22 @@ Exception: $_
 $upaRetention = if ($settings.UpaLogRetentionDays) { $settings.UpaLogRetentionDays } else { 30 }
 Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $upaRetention
 
+# Load the SharePoint command surface (PSSnapin on 2013/2016/2019,
+# SharePointServer module on Subscription Edition)
+try {
+    $spLoad = Import-SPSSharePointCommand
+    Write-Output "SharePoint commands loaded via: $spLoad"
+}
+catch {
+    $catchMessage = @"
+An error occurred while loading the SharePoint command surface
+Exception: $_
+"@
+    Add-SPSUserSyncEvent -Message $catchMessage -Source 'Import-SPSSharePointCommand' -EntryType 'Error'
+    Stop-Transcript | Out-Null
+    Exit
+}
+
 # Result paths
 $pathUserAddedInUSPFile    = Join-Path -Path $ctx.LogFolder -ChildPath ('SPSyncUserAddedInUSPList' + (Get-Date -Format yyyyMMdd-HHmm) + '.json')
 $pathUserNotAddedInUSPFile = Join-Path -Path $ctx.LogFolder -ChildPath ('SPSyncUserNotAddedInUSPList' + (Get-Date -Format yyyyMMdd-HHmm) + '.json')

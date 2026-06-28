@@ -17,8 +17,11 @@
         'Export-SPSUserReport'
         'Get-SPSADConnection'
         'Get-SPSADUser'
+        'Get-SPSInstalledProductVersion'
         'Get-SPSSyncSetting'
+        'Import-SPSSharePointCommand'
         'Initialize-SPSScript'
+        'Test-SPSADConnection'
         'Test-SPSADUser'
     )
 

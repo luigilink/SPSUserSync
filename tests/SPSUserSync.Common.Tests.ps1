@@ -26,8 +26,11 @@ Describe 'SPSUserSync.Common module' {
             'Export-SPSUserReport'
             'Get-SPSADConnection'
             'Get-SPSADUser'
+            'Get-SPSInstalledProductVersion'
             'Get-SPSSyncSetting'
+            'Import-SPSSharePointCommand'
             'Initialize-SPSScript'
+            'Test-SPSADConnection'
             'Test-SPSADUser'
         )
         $actual = (Get-Command -Module SPSUserSync.Common).Name | Sort-Object
@@ -69,5 +72,25 @@ Describe 'Public function contracts' {
         $cmd = Get-Command -Name Backup-SPSJsonFile -Module SPSUserSync.Common
         $cmd.Parameters['Path'].Attributes.Where{ $_.TypeId.Name -eq 'ParameterAttribute' }[0].Mandatory | Should -BeTrue
         $cmd.Parameters['HistoryFolder'].Attributes.Where{ $_.TypeId.Name -eq 'ParameterAttribute' }[0].Mandatory | Should -BeTrue
+    }
+
+    It 'Get-SPSInstalledProductVersion returns a FileVersionInfo output type' {
+        $cmd = Get-Command -Name Get-SPSInstalledProductVersion -Module SPSUserSync.Common
+        $cmd.OutputType.Type.FullName | Should -Contain 'System.Diagnostics.FileVersionInfo'
+    }
+
+    It 'Get-SPSInstalledProductVersion returns null off a SharePoint server' -Skip:($env:OS -eq 'Windows_NT' -and (Test-Path 'C:\Program Files\Common Files\microsoft shared\Web Server Extensions')) {
+        Get-SPSInstalledProductVersion | Should -BeNullOrEmpty
+    }
+
+    It 'Import-SPSSharePointCommand throws when SharePoint is not installed' -Skip:($env:OS -eq 'Windows_NT' -and (Test-Path 'C:\Program Files\Common Files\microsoft shared\Web Server Extensions')) {
+        { Import-SPSSharePointCommand -ErrorAction Stop } | Should -Throw '*SharePoint is not installed*'
+    }
+
+    It 'Test-SPSADConnection has mandatory DomainName and optional SampleAccount' {
+        $cmd = Get-Command -Name Test-SPSADConnection -Module SPSUserSync.Common
+        $cmd.Parameters['DomainName'].Attributes.Where{ $_.TypeId.Name -eq 'ParameterAttribute' }[0].Mandatory | Should -BeTrue
+        $cmd.Parameters.Keys | Should -Contain 'SampleAccount'
+        $cmd.Parameters['SampleAccount'].Attributes.Where{ $_.TypeId.Name -eq 'ParameterAttribute' }[0].Mandatory | Should -BeFalse
     }
 }

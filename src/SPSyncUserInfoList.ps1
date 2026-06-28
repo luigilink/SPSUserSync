@@ -297,6 +297,22 @@ Exception: $_
 # Rotate old logs
 Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $settings.LogRetentionDays
 
+# Load the SharePoint command surface (PSSnapin on 2013/2016/2019,
+# SharePointServer module on Subscription Edition)
+try {
+    $spLoad = Import-SPSSharePointCommand
+    Write-Output "SharePoint commands loaded via: $spLoad"
+}
+catch {
+    $catchMessage = @"
+An error occurred while loading the SharePoint command surface
+Exception: $_
+"@
+    Add-SPSUserSyncEvent -Message $catchMessage -Source 'Import-SPSSharePointCommand' -EntryType 'Error'
+    Stop-Transcript | Out-Null
+    Exit
+}
+
 # Resolve output paths
 $scriptRootPath = Split-Path -Parent $MyInvocation.MyCommand.Definition
 if ([string]::IsNullOrEmpty($FilterUrl)) {

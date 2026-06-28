@@ -64,6 +64,24 @@ Paste the resulting string into `secrets.psd1` under the matching `CredentialKey
 
 > ⚠️ **DPAPI binding**: a `PasswordSecure` value is only readable by the **same user account on the same machine** that produced it. You must regenerate it for every server and every service account.
 
+## Verify readiness (recommended)
+
+Before the first real run, run the bundled readiness check **on the target server, as the service account** that will own the scheduled task. It is read-only and non-destructive — it never writes a profile, creates the Event Log, or copies any file.
+
+```powershell
+cd D:\Tools\SCRIPTS\JOBS\SPSUserSync
+.\Test-SPSUserSyncReadiness.ps1
+```
+
+It validates Administrator rights, PowerShell 5.1, the module import, the three config files and their required keys, that every `Credential` domain's DPAPI secret decrypts under the current account, that each AD domain binds over LDAP, that the SharePoint snap-in/farm are reachable, that the `SPSUserSync` Event Log is usable, and that the master-VM share is reachable.
+
+Useful switches:
+
+- `-SkipNetwork` — skip the LDAP bind, MySite and master-VM share checks (quick config-only pass).
+- `-SkipSharePoint` — skip the SharePoint snap-in/farm checks (validate from a workstation).
+
+The script prints a `PASS / WARN / FAIL / SKIP` summary and exits `1` if any check failed, `0` otherwise. Resolve every **FAIL** before enabling the scheduled tasks; **WARN** items are usually role-specific (e.g. the MySite check only matters on the UPA master server, the master-VM share only on application farms).
+
 ## First run
 
 ### Application farm (snapshot generation)
