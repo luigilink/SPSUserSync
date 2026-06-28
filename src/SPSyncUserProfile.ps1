@@ -108,6 +108,7 @@ function Add-SPSUserProfile {
         $ClaimPrefix,
 
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Collections.ArrayList]
         $ResultCollection
     )
@@ -318,19 +319,29 @@ $usersWithoutPrerequisites = $psoSPSiteUsers | Where-Object -FilterScript { [str
 # Process eligible users
 $tbSPSUserProfileMgmt = New-Object -TypeName System.Collections.ArrayList
 foreach ($psoSPSiteUser in $usersWithPrerequisites) {
-    Add-SPSUserProfile `
-        -UserLogin $psoSPSiteUser.UserLogin `
-        -PreferredName $psoSPSiteUser.DisplayName `
-        -FirstName $psoSPSiteUser.FirstName `
-        -LastName $psoSPSiteUser.LastName `
-        -WorkEmail $psoSPSiteUser.Email `
-        -Country $psoSPSiteUser.Country `
-        -MySiteUrl $spMySiteHostUrl `
-        -ClaimPrefix $settings.ClaimPrefix `
-        -ResultCollection $tbSPSUserProfileMgmt
+    try {
+        Add-SPSUserProfile `
+            -UserLogin $psoSPSiteUser.UserLogin `
+            -PreferredName $psoSPSiteUser.DisplayName `
+            -FirstName $psoSPSiteUser.FirstName `
+            -LastName $psoSPSiteUser.LastName `
+            -WorkEmail $psoSPSiteUser.Email `
+            -Country $psoSPSiteUser.Country `
+            -MySiteUrl $spMySiteHostUrl `
+            -ClaimPrefix $settings.ClaimPrefix `
+            -ResultCollection $tbSPSUserProfileMgmt
+    }
+    catch {
+        $catchMessage = @"
+An error occurred while managing user '$($psoSPSiteUser.UserLogin)' in the User Profile Service App
+MySiteUrl: $spMySiteHostUrl
+Exception: $_
+"@
+        Write-Warning -Message $catchMessage
+        Add-SPSUserSyncEvent -Message $catchMessage -Source 'Add-SPSUserProfile' -EntryType 'Error'
+    }
 }
 
-Trap { Continue }
 if ($usersWithoutPrerequisites.Count -ne 0) {
     Write-Output "$($usersWithoutPrerequisites.Count) users do not meet Prerequisites: First Name, Last Name and Email aren't filled."
     $usersWithoutPrerequisites | ConvertTo-Json | Set-Content -Path $pathUserNotAddedInUSPFile -Force -Encoding UTF8
