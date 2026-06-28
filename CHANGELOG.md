@@ -5,6 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Test-SPSUserSyncReadiness.ps1` now verifies that the current account can **read the User Profile Service Application** (a non-destructive profile-count read via `UserProfileManager`, on the UPA master only). This catches the missing **Manage Profiles** permission that makes `SPSyncUserProfile.ps1` fail at runtime with *"ProfileDBCacheServiceClient.GetUserData threw exception: Access is denied."* — PASS with the profile count, WARN (pointing to the permission/farm-account prerequisite) when the read is denied. (#11)
+
+### Changed
+
+- Documentation: the prerequisites now state that the account running `SPSyncUserProfile.ps1` must be able to manage profiles on the UPA — either the **farm account** or an account granted **Administrator** of the UPA with the **Manage Profiles** permission. (#10)
+
 ## [1.2.0] - 2026-06-28
 
 ### Added
