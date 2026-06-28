@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-06-28
+
 ### Added
 
 - `Get-SPSInstalledProductVersion` (public) — reads the installed SharePoint version from `Microsoft.SharePoint.dll`, returning `$null` (silently) when SharePoint is not installed. (#6)

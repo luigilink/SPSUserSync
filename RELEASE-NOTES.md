@@ -1,36 +1,55 @@
 # SPSUserSync - Release Notes
 
-## [1.1.0] - 2026-06-26
+## [1.2.0] - 2026-06-28
+
+This release makes the toolkit deployable and verifiable on a real SharePoint
+server — including **Subscription Edition** — without the SharePoint Management
+Shell, adds a pre-flight readiness check, and makes user removal opt-in so a sync
+never prunes accounts from a live farm unless you ask it to.
+
+> **Behavior change — user removal is now opt-in.** On a claims-based farm,
+> earlier versions removed classic-format and system principals (e.g.
+> `NT AUTHORITY\authenticated users`) when `Set-SPUser -SyncFromAD` could not
+> resolve them. SPSUserSync now reports those users and leaves them in place by
+> default. Set `RemoveUnresolvableUsers = $true` in `sync-settings.psd1` to
+> restore the previous pruning behavior.
 
 ### Added
 
-- JSON snapshot history and anomaly detection (`SPSyncUserInfoList.ps1`):
-  - `Backup-SPSJsonFile` — archives the previous `SPSyncUserInfoListUserList.json` to `Logs\history\` with a timestamp before each regeneration.
-  - `Compare-SPSJsonSnapshots` — pure function returning `CurrentCount`, `PreviousCount`, `Delta`, `DropPercent`, `ThresholdPercent`, `IsAnomalous`.
-  - The script now archives the previous snapshot, regenerates, then raises a **Warning** in the SPSUserSync Event Log when the user count drops by at least `JsonDropThresholdPercent` (helps catch an unreachable AD forest or a bad exclusion before the UPA reconciliation runs).
-  - History snapshots are rotated using the existing `Clear-SPSLogFolder` with `-Extension '*.json'`.
-- New settings in `sync-settings.example.psd1` (backward-compatible defaults applied when absent):
-  - `JsonHistoryRetentionDays` (default 90)
-  - `JsonDropThresholdPercent` (default 20)
-  - `GenerateHtmlReport` (default `$true`)
-- Self-contained HTML reporting:
-  - `Export-SPSUserReport` — generates a single dependency-free HTML report (no CDN, works offline) for either dataset via `-ReportType UserInfoList|UserProfile`. Summary cards plus an interactive table (live search, column sort, pagination) rendered by embedded vanilla JavaScript. All AD-sourced values are HTML-encoded and rendered via `textContent`, so names/emails cannot inject markup.
-  - `SPSyncUserInfoList.ps1` writes `SPSyncUserInfoListReport-*.html` (total users, email coverage, top countries, top AD domains).
-  - `SPSyncUserProfile.ps1` writes `SPSyncUserProfileReport-*.html` (counts by Status: CREATE / UPDATE / INFO / UNKNOWN_USER).
-  - Reports are rotated with the existing `Clear-SPSLogFolder` using `-Extension '*.html'`, and can be disabled by setting `GenerateHtmlReport = $false`.
-- Pester test suite under `tests/` (39 tests, cross-platform):
-  - `SPSUserSync.Common.Tests.ps1` — module import, manifest validity, public/private surface, parameter contracts
-  - `Compare-SPSJsonSnapshots.Tests.ps1` — drop detection, threshold edges, growth, empty-previous
-  - `Backup-SPSJsonFile.Tests.ps1` — timestamped copy, copy-not-move, folder creation, missing source, content preservation
-  - `Export-SPSUserReport.Tests.ps1` — both report types, empty dataset, and an HTML-injection safety test
-  - `Private.Tests.ps1` — `ConvertFrom-SPSUserLogin`, `ConvertTo-SPSHtmlEncoded`, `Get-SPSJsonRecordCount` via `InModuleScope`
-- `.github/workflows/pester.yml` — runs Pester and PSScriptAnalyzer on pull requests touching `src/`, `tests/` or the analyzer settings.
-- `PSScriptAnalyzerSettings.psd1` — analyzer configuration (Error+Warning, with `PSUseSingularNouns` disabled for the deliberately plural `Compare-SPSJsonSnapshots` / `Get-SPSUniqueUsers`).
-- `.gitattributes` and `.editorconfig` — encode the project's text conventions.
+- **SharePoint command surface, edition-aware** (#6) — `Import-SPSSharePointCommand`
+  loads the snap-in on SharePoint 2013/2016/2019 and the `SharePointServer` module
+  on Subscription Edition (which no longer ships the snap-in), so both scripts run
+  from a plain `powershell.exe` (a scheduled task) instead of requiring the
+  SharePoint Management Shell. `Get-SPSInstalledProductVersion` backs the detection.
+- **Pre-flight readiness check** (#7) — `Test-SPSUserSyncReadiness.ps1` validates
+  Host, Module, Config, Secrets, AD, SharePoint, the Event Log and the master-VM
+  share, with colored PASS/WARN/FAIL/SKIP output and a 0/1 exit code. Read-only and
+  non-destructive. `Test-SPSADConnection` backs the AD section (binds, reads one
+  user, reports which key attributes are populated); `-SkipNetwork` /
+  `-SkipSharePoint` allow a config-only pass from a workstation.
+- **Unresolved-user audit in the HTML report** (#5) — rows whose identity did not
+  resolve from AD (no display name, or a display name equal to the de-claimed
+  login) are highlighted in amber, counted in a new **Unresolved** card, and
+  explained by a legend pointing to `RemoveUnresolvableUsers`. The UserProfile
+  report highlights `UNKNOWN_USER` rows the same way.
+- `RemoveUnresolvableUsers` setting (default `$false`) in
+  `sync-settings.example.psd1` (#4).
 
 ### Changed
 
-- All PowerShell files (`*.ps1`, `*.psm1`, `*.psd1`) are now stored as **UTF-8 with BOM** and checked out with **CRLF**, so Windows PowerShell 5.1 reads any non-ASCII content correctly instead of falling back to the ANSI code page. YAML, Markdown and JSON keep LF and no BOM.
-- Renamed two private report helpers to non-state-changing verbs (`New-SPSReportCard` -> `Get-SPSReportCardHtml`, `New-SPSReportTopList` -> `Get-SPSReportTopListHtml`) to satisfy PSScriptAnalyzer.
+- **User removal is opt-in** (#4) — see the behavior change above. The classic
+  system principals `NT AUTHORITY\*`, `BUILTIN\*` and `SHAREPOINT\*` are now always
+  excluded from processing, so they are never written to the JSON nor removed
+  (previously only their claims forms were excluded).
+- Both `SPSyncUserInfoList.ps1` and `SPSyncUserProfile.ps1` load the SharePoint
+  command surface via `Import-SPSSharePointCommand` at startup (#6).
+- The release ZIP now contains the **contents** of `src/` at its root, so the
+  archive extracts straight into the deployment folder with no manual move (#8).
+
+### Fixed
+
+- The `Logs` folder (transcript, rotation logs, deleted-user snapshots, HTML
+  reports) is written next to the **calling script** again, instead of inside the
+  module folder where it was wiped on every module redeploy (#3).
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)
