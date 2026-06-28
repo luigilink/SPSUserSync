@@ -120,6 +120,11 @@
     }
 
     # ---- Per-type configuration ---------------------------------------------------
+    # Per-row flag (keyed by record index) used to highlight problem rows in the
+    # table, and an optional legend shown above the table when any row is flagged.
+    $flagByIndex = @{}
+    $detailsNote = ''
+
     if ($ReportType -eq 'UserInfoList') {
         if ([string]::IsNullOrEmpty($Title)) { $Title = 'SPSUserSync - User Information List Report' }
         $columns = @(
@@ -132,6 +137,25 @@
         $total        = $records.Count
         $withEmail    = @($records | Where-Object { -not [string]::IsNullOrEmpty($_.Email) }).Count
         $withoutEmail = $total - $withEmail
+
+        # Flag users whose identity did not resolve from AD. A record is
+        # "unresolved" when it has no display name, or its display name is just
+        # the de-claimed login (the signature of a failed Set-SPUser -SyncFromAD:
+        # the script fell back to the SharePoint login as the display name).
+        # These rows will not sync to the user profile and are the ones
+        # Remove-SPUser would prune when RemoveUnresolvableUsers is enabled.
+        $unresolvedCount = 0
+        for ($i = 0; $i -lt $records.Count; $i++) {
+            $display   = "$($records[$i].DisplayName)".Trim()
+            $declaimed = "$($records[$i].UserLogin)"
+            if (-not [string]::IsNullOrEmpty($ClaimPrefix) -and $declaimed.StartsWith($ClaimPrefix)) {
+                $declaimed = $declaimed.Substring($ClaimPrefix.Length)
+            }
+            if ([string]::IsNullOrEmpty($display) -or $display.Equals($declaimed, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $flagByIndex[$i] = 'unresolved'
+                $unresolvedCount++
+            }
+        }
 
         $topCountries = $records |
             Where-Object { -not [string]::IsNullOrEmpty($_.Country) } |
@@ -147,7 +171,13 @@
             (Get-SPSReportCardHtml -Value $total -Label 'Total users')
             (Get-SPSReportCardHtml -Value $withEmail -Label 'With email')
             (Get-SPSReportCardHtml -Value $withoutEmail -Label 'Without email')
+            (Get-SPSReportCardHtml -Value $unresolvedCount -Label 'Unresolved' -Tone $(if ($unresolvedCount -gt 0) { 'warn' } else { '' }))
         ) -join ''
+
+        if ($unresolvedCount -gt 0) {
+            $userWord = if ($unresolvedCount -eq 1) { 'user' } else { 'users' }
+            $detailsNote = "<div class=`"note`"><strong>$unresolvedCount unresolved $userWord</strong> highlighted below &mdash; their identity did not resolve from Active Directory (no display name, or the display name is just the login), so they will not sync to the user profile and would be removed if <code>RemoveUnresolvableUsers</code> is enabled.</div>"
+        }
 
         $listsHtml = (Get-SPSReportTopListHtml -Title 'Top countries' -Groups $topCountries) +
                      (Get-SPSReportTopListHtml -Title 'Top AD domains' -Groups $topDomains)
@@ -165,19 +195,37 @@
         $total    = $records.Count
         $byStatus = $records | Group-Object -Property Status | Sort-Object Count -Descending
 
+        # Highlight rows that could not be matched to a profile (UNKNOWN_USER).
+        $unknownCount = 0
+        for ($i = 0; $i -lt $records.Count; $i++) {
+            if ("$($records[$i].Status)" -eq 'UNKNOWN_USER') {
+                $flagByIndex[$i] = 'unresolved'
+                $unknownCount++
+            }
+        }
+        if ($unknownCount -gt 0) {
+            $userWord = if ($unknownCount -eq 1) { 'account' } else { 'accounts' }
+            $detailsNote = "<div class=`"note`"><strong>$unknownCount UNKNOWN_USER $userWord</strong> highlighted below &mdash; these were present in the snapshot but could not be matched to a user profile.</div>"
+        }
+
         $cards = @( (Get-SPSReportCardHtml -Value $total -Label 'Total processed') )
         foreach ($group in $byStatus) {
             $statusLabel = if ([string]::IsNullOrEmpty($group.Name)) { '(none)' } else { $group.Name }
-            $cards += (Get-SPSReportCardHtml -Value $group.Count -Label $statusLabel)
+            $cardTone    = if ($group.Name -eq 'UNKNOWN_USER') { 'warn' } else { '' }
+            $cards += (Get-SPSReportCardHtml -Value $group.Count -Label $statusLabel -Tone $cardTone)
         }
         $summaryInner = "<div class=`"cards`">$($cards -join '')</div>"
     }
 
     # ---- Build the embedded data payload -----------------------------------------
-    $rows = foreach ($record in $records) {
+    $rows = for ($i = 0; $i -lt $records.Count; $i++) {
+        $record = $records[$i]
         $row = [ordered]@{}
         foreach ($column in $columns) {
             $row[$column.field] = "$($record.($column.field))"
+        }
+        if ($flagByIndex.ContainsKey($i)) {
+            $row['_flag'] = $flagByIndex[$i]
         }
         [PSCustomObject]$row
     }
@@ -209,6 +257,7 @@
             "<div class=`"meta`">$metaLine</div>" +
             "<div class=`"summary`"><h3 style=`"margin-top:0`">Summary</h3>$summaryInner</div>" +
             '<h2>Details</h2>' +
+            $detailsNote +
             '<div class="controls"><input id="spsSearch" class="search" placeholder="Filter rows..."><div class="pager"><button id="spsPrev">Prev</button><span id="spsPageInfo"></span><button id="spsNext">Next</button></div></div>' +
             '<table><thead id="spsThead"></thead><tbody id="spsTbody"></tbody></table>' +
             "<div class=`"footer`">Generated by SPSUserSync $encVersion. This report contains personal data (names, email addresses) &mdash; handle and store it accordingly.</div>" +

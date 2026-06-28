@@ -141,9 +141,34 @@ function Get-SPSUniqueUsers {
             $getSPSites = Get-SPSite -Limit All -ErrorAction SilentlyContinue
         }
 
+        # Built-in safety exclusions: these classic system principals are never
+        # read into the JSON nor removed from a web, regardless of config. Their
+        # claims forms may be listed in ExcludedUserLogins, but the classic forms
+        # (e.g. 'NT AUTHORITY\authenticated users') would otherwise slip through
+        # and be pruned by the SyncFromAD cleanup below on a claims-based farm.
+        $builtInExcludedPatterns = @(
+            'NT AUTHORITY\*'
+            'BUILTIN\*'
+            'SHAREPOINT\*'
+        )
         $excludedLiterals = $Settings.ExcludedUserLogins
-        $excludedPatterns = $Settings.ExcludedUserLoginPatterns
+        $excludedPatterns = @()
+        if ($Settings.ExcludedUserLoginPatterns) {
+            $excludedPatterns += $Settings.ExcludedUserLoginPatterns
+        }
+        $excludedPatterns += $builtInExcludedPatterns
         $claimPrefix      = $Settings.ClaimPrefix
+
+        # RemoveUnresolvableUsers gates the destructive cleanup below. When $false
+        # (default), a user that cannot be synced from AD is reported and left in
+        # place; only the benign Set-SPUser -SyncFromAD refresh runs. When $true,
+        # the user is removed from the web (legacy behavior).
+        $removeUnresolvableUsers = if ($null -ne $Settings.RemoveUnresolvableUsers) {
+            [bool]$Settings.RemoveUnresolvableUsers
+        }
+        else {
+            $false
+        }
 
         $spUsersFound = 0
         foreach ($site in $getSPSites) {
@@ -208,14 +233,19 @@ function Get-SPSUniqueUsers {
                     catch [Microsoft.SharePoint.SPException] {
                         Write-Warning -Message $_.Exception.Message
                         if ($_.Exception.Message.Contains('Cannot get the full name or e-mail address of user')) {
-                            Write-Output "Remove user: $($spUser.UserLogin) from $($site.RootWeb.Url)"
-                            Remove-SPUser -Identity $spUser -Web $site.RootWeb -Verbose -Confirm:$false
-                            [void]$tbSPSDeletedUser.Add([SPSDeletedUser]@{
-                                    UserLogin = $spUser.UserLogin.Replace($claimPrefix, '')
-                                    Url       = $site.RootWeb.Url
-                                    Date      = (Get-Date -Format yyyyMMddTHHmmss)
-                                    TimeStamp = ((Get-Date).ToFileTime())
-                                })
+                            if ($removeUnresolvableUsers) {
+                                Write-Output "Remove user: $($spUser.UserLogin) from $($site.RootWeb.Url)"
+                                Remove-SPUser -Identity $spUser -Web $site.RootWeb -Verbose -Confirm:$false
+                                [void]$tbSPSDeletedUser.Add([SPSDeletedUser]@{
+                                        UserLogin = $spUser.UserLogin.Replace($claimPrefix, '')
+                                        Url       = $site.RootWeb.Url
+                                        Date      = (Get-Date -Format yyyyMMddTHHmmss)
+                                        TimeStamp = ((Get-Date).ToFileTime())
+                                    })
+                            }
+                            else {
+                                Write-Output "Unresolvable user kept (RemoveUnresolvableUsers disabled): $($spUser.UserLogin) at $($site.RootWeb.Url)"
+                            }
                         }
                         else {
                             $catchMessage = @"
@@ -273,7 +303,7 @@ Clear-Host
 
 # Bootstrap: admin check, transcript, banner (version read from the module manifest)
 try {
-    $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserInfoList'
+    $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserInfoList' -ScriptRoot $PSScriptRoot
 }
 catch {
     Write-Error -Message $_.Exception.Message
@@ -296,6 +326,22 @@ Exception: $_
 
 # Rotate old logs
 Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $settings.LogRetentionDays
+
+# Load the SharePoint command surface (PSSnapin on 2013/2016/2019,
+# SharePointServer module on Subscription Edition)
+try {
+    $spLoad = Import-SPSSharePointCommand
+    Write-Output "SharePoint commands loaded via: $spLoad"
+}
+catch {
+    $catchMessage = @"
+An error occurred while loading the SharePoint command surface
+Exception: $_
+"@
+    Add-SPSUserSyncEvent -Message $catchMessage -Source 'Import-SPSSharePointCommand' -EntryType 'Error'
+    Stop-Transcript | Out-Null
+    Exit
+}
 
 # Resolve output paths
 $scriptRootPath = Split-Path -Parent $MyInvocation.MyCommand.Definition

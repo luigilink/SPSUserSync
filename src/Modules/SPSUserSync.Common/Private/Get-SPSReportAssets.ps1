@@ -12,12 +12,18 @@
 
         [Parameter(Mandatory = $true)]
         [System.String]
-        $Label
+        $Label,
+
+        [Parameter()]
+        [ValidateSet('', 'warn')]
+        [System.String]
+        $Tone = ''
     )
 
-    $encValue = ConvertTo-SPSHtmlEncoded -Value ("$Value")
-    $encLabel = ConvertTo-SPSHtmlEncoded -Value $Label
-    return "<div class=`"card`"><div class=`"card-value`">$encValue</div><div class=`"card-label`">$encLabel</div></div>"
+    $encValue  = ConvertTo-SPSHtmlEncoded -Value ("$Value")
+    $encLabel  = ConvertTo-SPSHtmlEncoded -Value $Label
+    $toneClass = if ([string]::IsNullOrEmpty($Tone)) { '' } else { " $Tone" }
+    return "<div class=`"card$toneClass`"><div class=`"card-value`">$encValue</div><div class=`"card-label`">$encLabel</div></div>"
 }
 
 function Get-SPSReportTopListHtml {
@@ -79,12 +85,16 @@ h3{color:var(--brand-dark);font-size:13px;margin:0 0 6px}
 .card{background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 16px;min-width:120px}
 .card-value{font-size:24px;font-weight:700;color:var(--brand)}
 .card-label{font-size:12px;color:var(--muted)}
+.card.warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.card.warn .card-value{color:var(--warn-border)}
 .lists{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
 .list-box{flex:1;min-width:240px}
 table{border-collapse:collapse;width:100%;font-size:12px}
 th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
 th{background:var(--brand);color:#fff;cursor:pointer;user-select:none;position:sticky;top:0}
 tbody tr:nth-child(even){background:var(--zebra)}
+tbody tr.unresolved td{background:var(--warn-bg)}
+tbody tr.unresolved td:first-child{border-left:3px solid var(--warn-border);font-weight:600}
 .controls{display:flex;justify-content:space-between;align-items:center;margin:12px 0;flex-wrap:wrap;gap:8px}
 .search{padding:6px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;width:280px;max-width:100%}
 .pager{display:flex;gap:8px;align-items:center;font-size:12px}
@@ -164,6 +174,7 @@ function Get-SPSReportHtmlScript {
     tbody.innerHTML = '';
     slice.forEach(function(r){
       var tr = document.createElement('tr');
+      if (r._flag) { tr.className = r._flag; }
       cols.forEach(function(c){
         var td = document.createElement('td');
         td.textContent = r[c.field] == null ? '' : r[c.field];

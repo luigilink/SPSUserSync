@@ -36,12 +36,21 @@
         bumps that one ModuleVersion at release time and the scripts pick
         it up automatically.
 
+        .PARAMETER ScriptRoot
+        Root folder of the calling script (typically the caller's
+        $PSScriptRoot). Used to place the 'Logs' folder next to the entry-point
+        script. Passing it explicitly is required because module functions run
+        in the module session state, so the caller's $PSScriptRoot cannot be
+        discovered reliably from inside this function. When omitted,
+        Initialize-SPSScript walks the call stack to locate the caller.
+
         .PARAMETER LogFolder
-        Folder where the transcript and rotation logs are written. Defaults
-        to a 'Logs' folder next to the caller script.
+        Folder where the transcript and rotation logs are written. When omitted,
+        defaults to a 'Logs' folder under -ScriptRoot (or, if that is also
+        omitted, next to the caller script as resolved from the call stack).
 
         .EXAMPLE
-        $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserInfoList'
+        $ctx = Initialize-SPSScript -ScriptName 'SPSyncUserInfoList' -ScriptRoot $PSScriptRoot
         Clear-SPSLogFolder -Path $ctx.LogFolder -Retention 90
     #>
     [CmdletBinding()]
@@ -55,6 +64,10 @@
         [Parameter()]
         [System.String]
         $Version,
+
+        [Parameter()]
+        [System.String]
+        $ScriptRoot,
 
         [Parameter()]
         [System.String]
@@ -79,12 +92,25 @@
     }
 
     if ([string]::IsNullOrEmpty($LogFolder)) {
-        $callerInvocation = (Get-Variable -Name MyInvocation -Scope 1 -ErrorAction SilentlyContinue).Value
-        if ($callerInvocation -and $callerInvocation.MyCommand.Definition) {
-            $callerRoot = Split-Path -Parent $callerInvocation.MyCommand.Definition
-        }
-        else {
-            $callerRoot = Get-Location | Select-Object -ExpandProperty Path
+        $callerRoot = $ScriptRoot
+        if ([string]::IsNullOrEmpty($callerRoot)) {
+            # Module functions execute in the module session state, so
+            # Get-Variable -Scope cannot reach the caller script (it would
+            # resolve to this module folder). Walk the real call stack instead
+            # and pick the first frame that lives outside the module directory.
+            $moduleRoot = Split-Path -Parent $PSScriptRoot
+            $callerFrame = Get-PSCallStack |
+                Where-Object {
+                    $_.ScriptName -and
+                    -not $_.ScriptName.StartsWith($moduleRoot, [System.StringComparison]::OrdinalIgnoreCase)
+                } |
+                Select-Object -First 1
+            if ($callerFrame -and $callerFrame.ScriptName) {
+                $callerRoot = Split-Path -Parent $callerFrame.ScriptName
+            }
+            else {
+                $callerRoot = Get-Location | Select-Object -ExpandProperty Path
+            }
         }
         $LogFolder = Join-Path -Path $callerRoot -ChildPath 'Logs'
     }
