@@ -170,6 +170,26 @@ function Get-SPSUniqueUsers {
             $false
         }
 
+        # ParallelADResolution (opt-in) resolves the unique user logins against AD
+        # concurrently via a RunspacePool. Off by default: on small farms the
+        # per-runspace module-import overhead outweighs the saved LDAP latency.
+        $parallelADResolution = if ($null -ne $Settings.ParallelADResolution) {
+            [bool]$Settings.ParallelADResolution
+        }
+        else {
+            $false
+        }
+        $adThrottleLimit = if ($null -ne $Settings.MaxParallelADQueries -and [int]$Settings.MaxParallelADQueries -gt 0) {
+            [int]$Settings.MaxParallelADQueries
+        }
+        else {
+            0
+        }
+
+        # Phase 1 records one snapshot per unique login (first occurrence wins), in
+        # an ordinal (case-sensitive) dictionary to preserve the previous dedup.
+        $uniqueUsers = [System.Collections.Specialized.OrderedDictionary]::new([System.StringComparer]::Ordinal)
+
         $spUsersFound = 0
         foreach ($site in $getSPSites) {
             $spUsersFound += $site.RootWeb.SiteUsers.Count
@@ -181,48 +201,15 @@ function Get-SPSUniqueUsers {
             }
 
             foreach ($spUser in $spUsers) {
-                # Reset per-iteration variables to avoid leakage from the previous user
-                $spUserCountry     = $null
-                $spUserLocation    = $null
-                $spUserFirstName   = $null
-                $spUserLastName    = $null
-                $spUserMailfromAD  = $null
-                $spUserDisplayName = $null
-
-                $adUser = Get-SPSADUser -UserLogin $spUser.UserLogin
-                if ($null -ne $adUser) {
-                    $spUserCountry     = "$($adUser.Properties['co'])".ToUpper()
-                    $spUserLocation    = "$($adUser.Properties['l'])".ToUpper()
-                    $spUserFirstName   = "$($adUser.Properties['givenname'])"
-                    $spUserLastName    = "$($adUser.Properties['sn'])"
-                    $spUserMailfromAD  = "$($adUser.Properties['mail'])"
-                    $spUserDisplayName = "$($adUser.Properties['displayname'])"
-                    if ([string]::IsNullOrEmpty($spUserDisplayName) -and -not [string]::IsNullOrEmpty($spUserFirstName) -and -not [string]::IsNullOrEmpty($spUserLastName)) {
-                        $spUserDisplayName = "$spUserFirstName $spUserLastName"
+                # Phase 1: remember the first occurrence of each unique login. Its
+                # SharePoint DisplayName and Email feed the JSON fallbacks in phase
+                # 3; the AD resolution itself happens in phase 2.
+                if (-not $uniqueUsers.Contains($spUser.UserLogin)) {
+                    $uniqueUsers[$spUser.UserLogin] = [PSCustomObject]@{
+                        UserLogin     = $spUser.UserLogin
+                        SPDisplayName = $spUser.DisplayName
+                        SPEmail       = $spUser.Email
                     }
-                }
-                # Fallback to the SharePoint DisplayName when AD did not provide one
-                if ([string]::IsNullOrEmpty($spUserDisplayName)) {
-                    $spUserDisplayName = $spUser.DisplayName
-                }
-
-                if ([string]::IsNullOrEmpty($spUser.Email)) {
-                    $spUserEmail = "$spUserMailfromAD"
-                }
-                else {
-                    $spUserEmail = "$($spUser.Email)"
-                }
-
-                if ($tbSPSiteUsers.Count -eq 0 -or -not ($tbSPSiteUsers.UserLogin.Contains($spUser.UserLogin))) {
-                    [void]$tbSPSiteUsers.Add([SPSiteUser]@{
-                            UserLogin   = $spUser.UserLogin
-                            DisplayName = $spUserDisplayName
-                            FirstName   = $spUserFirstName
-                            LastName    = $spUserLastName
-                            Email       = $spUserEmail
-                            Location    = $spUserLocation
-                            Country     = $spUserCountry
-                        })
                 }
 
                 if ([string]::IsNullOrEmpty($spUser.DisplayName) -or $spUser.UserLogin.Contains($spUser.DisplayName)) {
@@ -266,6 +253,55 @@ Exception: $_
                     }
                 }
             }
+        }
+
+        # Phase 2: resolve the unique logins against AD. Parallel when enabled,
+        # otherwise a sequential loop — both go through ConvertTo-SPSUserRecord so
+        # the projected attributes are identical. Either way each unique login is
+        # resolved exactly once (previously the same login was looked up once per
+        # web it appeared in).
+        $uniqueLogins    = @($uniqueUsers.Keys)
+        $resolvedByLogin = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::Ordinal)
+        if ($parallelADResolution -and $uniqueLogins.Count -gt 0) {
+            Write-Output "Resolving $($uniqueLogins.Count) unique users against AD in parallel..."
+            foreach ($resolved in (Resolve-SPSADUserBatch -UserLogin $uniqueLogins -ThrottleLimit $adThrottleLimit)) {
+                $resolvedByLogin[$resolved.UserLogin] = $resolved
+            }
+        }
+        else {
+            foreach ($login in $uniqueLogins) {
+                $adUser = Get-SPSADUser -UserLogin $login
+                $resolvedByLogin[$login] = ConvertTo-SPSUserRecord -UserLogin $login -AdUser $adUser
+            }
+        }
+
+        # Phase 3: build one JSON record per unique user (no SharePoint calls).
+        # DisplayName falls back to the SharePoint display name, and the SharePoint
+        # email wins over the AD mail, exactly as the sequential version did.
+        foreach ($snapshot in $uniqueUsers.Values) {
+            $resolved = $resolvedByLogin[$snapshot.UserLogin]
+
+            $recordDisplayName = $resolved.DisplayName
+            if ([string]::IsNullOrEmpty($recordDisplayName)) {
+                $recordDisplayName = $snapshot.SPDisplayName
+            }
+
+            if ([string]::IsNullOrEmpty($snapshot.SPEmail)) {
+                $recordEmail = "$($resolved.Email)"
+            }
+            else {
+                $recordEmail = "$($snapshot.SPEmail)"
+            }
+
+            [void]$tbSPSiteUsers.Add([SPSiteUser]@{
+                    UserLogin   = $snapshot.UserLogin
+                    DisplayName = $recordDisplayName
+                    FirstName   = $resolved.FirstName
+                    LastName    = $resolved.LastName
+                    Email       = $recordEmail
+                    Location    = $resolved.Location
+                    Country     = $resolved.Country
+                })
         }
 
         Write-Output "$spUsersFound users found in all SPSite object"

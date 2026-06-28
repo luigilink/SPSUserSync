@@ -1,38 +1,41 @@
 # SPSUserSync - Release Notes
 
-## [1.2.1] - 2026-06-28
+## [1.3.0] - 2026-06-28
 
-A small follow-up to 1.2.0, with one important fix to the User Profile
-reconciliation script plus a documentation/readiness improvement around UPA
-permissions.
-
-### Fixed
-
-- `SPSyncUserProfile.ps1` processed **no** eligible users at all — the run
-  reported "N users do not meet Prerequisites", wrote no
-  `SPSyncUserAddedInUSPList` file and logged no error, so it looked like a silent
-  no-op. `Add-SPSUserProfile`'s mandatory `-ResultCollection` parameter rejected
-  the **empty** `ArrayList` on the first loop iteration, and a script-scoped
-  `Trap { Continue }` swallowed the terminating error and abandoned the whole
-  batch. Added `[AllowEmptyCollection()]`, wrapped the per-user call in
-  `try/catch` (one failing user is logged and the batch continues), and removed
-  the misleading `Trap`. (#13)
+This release adds optional parallel Active Directory resolution to
+`SPSyncUserInfoList.ps1`, for large multi-forest farms where the per-user LDAP
+round-trip dominates the runtime. It is opt-in and off by default, and the
+generated JSON is byte-for-byte identical whether parallel resolution is on or
+off (verified on a SharePoint Subscription Edition farm).
 
 ### Added
 
-- The readiness check (`Test-SPSUserSyncReadiness.ps1`) now verifies the current
-  account can **read the User Profile Service Application** — a non-destructive
-  profile-count read via `UserProfileManager`, on the UPA master only. This
-  catches the missing **Manage Profiles** permission that otherwise makes
-  `SPSyncUserProfile.ps1` fail at runtime with *"ProfileDBCacheServiceClient.GetUserData
-  threw exception: Access is denied."* PASS reports the profile count; WARN points
-  to the permission / farm-account prerequisite when the read is denied. (#11)
+- **Parallel AD resolution** (#14). With `ParallelADResolution = $true` (new
+  setting, default `$false`), the unique user logins are resolved against AD
+  concurrently through a RunspacePool — Windows PowerShell 5.1 compatible, no
+  `ForEach-Object -Parallel` required. `MaxParallelADQueries` sets the degree of
+  parallelism (0 = auto from the CPU count). Off by default because on small
+  farms the per-runspace module-import overhead is not amortized. Two new public
+  helpers back it: `Resolve-SPSADUserBatch` (the RunspacePool resolver) and
+  `Get-SPSThrottleLimit` (CPU-based default). A measured ~8x speedup on a 40-user
+  mock with 100 ms LDAP latency.
+- `ConvertTo-SPSUserRecord` (#14) — the single `Get-SPSADUser` -> record
+  projection shared by both the sequential path and the parallel worker, which is
+  what guarantees the identical JSON.
 
 ### Changed
 
-- The prerequisites now document that the account running `SPSyncUserProfile.ps1`
-  must be able to manage profiles on the UPA — either the **farm account** or an
-  account granted **Administrator** of the UPA with the **Manage Profiles**
-  permission. (#10)
+- `SPSyncUserInfoList.ps1` now resolves each **unique** login against AD exactly
+  once (previously once per web the user appeared in), by separating the
+  user-collection, AD-resolution and JSON-building passes. This also speeds up
+  the default sequential mode on farms where users span many sites. The
+  user-removal walk (`Set-SPUser` / `Remove-SPUser`) is unchanged and still runs
+  per web. (#14)
+
+### Upgrade notes
+
+- No action required: `ParallelADResolution` and `MaxParallelADQueries` are
+  optional and default to the previous (sequential) behavior. Add them to
+  `sync-settings.psd1` only when you want to enable parallel resolution.
 
 A full list of changes in each version can be found in the [change log](CHANGELOG.md)

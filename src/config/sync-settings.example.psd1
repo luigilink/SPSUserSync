@@ -56,4 +56,17 @@
     JsonHistoryRetentionDays = 90
     JsonDropThresholdPercent = 20
     GenerateHtmlReport       = $true
+
+    # Parallel AD resolution (added in 1.3.0)
+    # ParallelADResolution : when $true, SPSyncUserInfoList resolves the unique
+    #                        user logins against AD concurrently (RunspacePool).
+    #                        Worth it on large multi-forest farms where the LDAP
+    #                        round-trip dominates; leave $false on small farms,
+    #                        where the per-runspace module-import overhead is not
+    #                        amortized. The resulting JSON is identical either way.
+    # MaxParallelADQueries : max concurrent AD lookups. 0 (or absent) lets the
+    #                        toolkit pick a value from the CPU count
+    #                        (Get-SPSThrottleLimit: cap 10 on 8+ logical CPUs).
+    ParallelADResolution = $false
+    MaxParallelADQueries = 0
 }
