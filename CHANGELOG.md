@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.1] - 2026-06-28
 
+### Fixed
+
+- `SPSyncUserProfile.ps1` processed **no** eligible users at all (the run reported "N users do not meet Prerequisites", wrote no `SPSyncUserAddedInUSPList` file and logged no error). `Add-SPSUserProfile`'s mandatory `-ResultCollection` parameter rejected the **empty** `ArrayList` on the first loop iteration (`Cannot bind argument to parameter 'ResultCollection' because it is an empty collection.`), and a script-scoped `Trap { Continue }` swallowed the terminating error and abandoned the whole batch. Added `[AllowEmptyCollection()]` to the parameter, wrapped the per-user call in `try/catch` (so one failing user is logged and the batch continues), and removed the misleading `Trap`. (#13)
+
 ### Added
 
 - `Test-SPSUserSyncReadiness.ps1` now verifies that the current account can **read the User Profile Service Application** (a non-destructive profile-count read via `UserProfileManager`, on the UPA master only). This catches the missing **Manage Profiles** permission that makes `SPSyncUserProfile.ps1` fail at runtime with *"ProfileDBCacheServiceClient.GetUserData threw exception: Access is denied."* — PASS with the profile count, WARN (pointing to the permission/farm-account prerequisite) when the read is denied. (#11)

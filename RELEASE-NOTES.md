@@ -2,10 +2,21 @@
 
 ## [1.2.1] - 2026-06-28
 
-A small follow-up to 1.2.0. No functional change to the sync itself: this
-release documents a User Profile Service permission prerequisite and teaches the
-readiness check to verify it, so the gap is caught before the first run instead
-of mid-job on the master farm.
+A small follow-up to 1.2.0, with one important fix to the User Profile
+reconciliation script plus a documentation/readiness improvement around UPA
+permissions.
+
+### Fixed
+
+- `SPSyncUserProfile.ps1` processed **no** eligible users at all — the run
+  reported "N users do not meet Prerequisites", wrote no
+  `SPSyncUserAddedInUSPList` file and logged no error, so it looked like a silent
+  no-op. `Add-SPSUserProfile`'s mandatory `-ResultCollection` parameter rejected
+  the **empty** `ArrayList` on the first loop iteration, and a script-scoped
+  `Trap { Continue }` swallowed the terminating error and abandoned the whole
+  batch. Added `[AllowEmptyCollection()]`, wrapped the per-user call in
+  `try/catch` (one failing user is logged and the batch continues), and removed
+  the misleading `Trap`. (#13)
 
 ### Added
 
