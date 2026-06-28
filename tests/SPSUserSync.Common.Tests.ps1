@@ -28,8 +28,10 @@ Describe 'SPSUserSync.Common module' {
             'Get-SPSADUser'
             'Get-SPSInstalledProductVersion'
             'Get-SPSSyncSetting'
+            'Get-SPSThrottleLimit'
             'Import-SPSSharePointCommand'
             'Initialize-SPSScript'
+            'Resolve-SPSADUserBatch'
             'Test-SPSADConnection'
             'Test-SPSADUser'
         )
