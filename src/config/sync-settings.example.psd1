@@ -28,6 +28,18 @@
         'c:0+.w|s-1-5-21-*'         # Local Windows accounts (SID-based claim)
         '*EXAMPLEDOMAIN\*'          # Replace with any AD domain name to exclude entirely
     )
+    # In addition to the entries above, SPSUserSync always excludes the classic
+    # system principals 'NT AUTHORITY\*', 'BUILTIN\*' and 'SHAREPOINT\*'. These are
+    # built in (never read into the JSON nor removed), so you only need to list
+    # your own domains/accounts here.
+
+    # RemoveUnresolvableUsers : when $true, a user whose AD sync fails with
+    #   "Cannot get the full name or e-mail address" is removed from the web
+    #   (Remove-SPUser). When $false (default), the user is reported and left in
+    #   place and only the benign Set-SPUser -SyncFromAD refresh runs. Leave $false
+    #   unless you specifically want SPSUserSync to prune unresolvable accounts
+    #   from the farm.
+    RemoveUnresolvableUsers = $false
 
     MasterVM       = 'YOUR-MASTER-SERVER'
     MySiteUrl      = 'https://mysite.contoso.com'
