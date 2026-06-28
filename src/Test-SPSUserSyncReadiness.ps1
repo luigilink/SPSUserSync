@@ -20,6 +20,9 @@
       (unless -SkipNetwork) that an LDAP bind succeeds.
     - That the SharePoint snap-in is available and the farm is reachable
       (unless -SkipSharePoint).
+    - That the current account can read the User Profile Service Application
+      (a non-destructive profile-count read; UPA master only, unless
+      -SkipNetwork).
     - That the custom 'SPSUserSync' Event Log can be used.
     - That the MySite host and the master VM share are reachable
       (unless -SkipNetwork).
@@ -413,12 +416,40 @@ else {
         }
 
         if (-not $SkipNetwork -and $null -ne $settings -and -not [string]::IsNullOrEmpty($settings.MySiteUrl)) {
+            $mySiteObject = $null
             try {
-                $site = Get-SPSite $settings.MySiteUrl -ErrorAction Stop
-                Add-CheckResult -Section 'SharePoint' -Name 'MySite host reachable' -Status 'PASS' -Detail $site.Url
+                $mySiteObject = Get-SPSite $settings.MySiteUrl -ErrorAction Stop
+                Add-CheckResult -Section 'SharePoint' -Name 'MySite host reachable' -Status 'PASS' -Detail $mySiteObject.Url
             }
             catch {
                 Add-CheckResult -Section 'SharePoint' -Name 'MySite host reachable' -Status 'WARN' -Detail "Could not open $($settings.MySiteUrl) (only needed on the UPA master server)"
+            }
+
+            # Non-destructive UPA probe (UPA master only): prove the current
+            # account can READ the User Profile Service Application. This is the
+            # permission whose absence makes SPSyncUserProfile.ps1 fail with
+            # 'ProfileDBCacheServiceClient.GetUserData threw exception: Access is
+            # denied.' We only read the profile count; no profile is ever
+            # created, updated or deleted.
+            if ($null -ne $mySiteObject) {
+                try {
+                    $upaContext = Get-SPServiceContext -Site $mySiteObject -ErrorAction Stop
+                    $upaManager = New-Object -TypeName Microsoft.Office.Server.UserProfiles.UserProfileManager($upaContext)
+                    $profileCount = $upaManager.Count
+                    Add-CheckResult -Section 'SharePoint' -Name 'User Profile Service access' -Status 'PASS' -Detail "Can read the UPA ($profileCount profiles)"
+                }
+                catch {
+                    $upaMessage = $_.Exception.Message
+                    if ($null -ne $_.Exception.InnerException) {
+                        $upaMessage = $_.Exception.InnerException.Message
+                    }
+                    if ($upaMessage -match 'Access is denied') {
+                        Add-CheckResult -Section 'SharePoint' -Name 'User Profile Service access' -Status 'WARN' -Detail "Access denied reading the UPA. The account needs Manage Profiles on the User Profile Service Application (or the farm account). Required only on the UPA master server."
+                    }
+                    else {
+                        Add-CheckResult -Section 'SharePoint' -Name 'User Profile Service access' -Status 'WARN' -Detail "Could not read the UPA: $upaMessage (only needed on the UPA master server)"
+                    }
+                }
             }
         }
     }

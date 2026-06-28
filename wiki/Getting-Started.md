@@ -9,6 +9,7 @@ This page walks you through installing **SPSUserSync** and running it for the fi
 | SharePoint Server | **2016**, **2019**, or **Subscription Edition** |
 | PowerShell | **5.1** (Windows PowerShell) on every server in scope |
 | Privileges | The account running the scripts must be a **Farm Administrator** and member of the local **Administrators** group on the server |
+| User Profile Service | For `SPSyncUserProfile.ps1`: the account must be able to **manage profiles** on the User Profile Service Application — either the **farm account**, or an account granted **Administrator** of the UPA with the **Manage Profiles** permission (Central Administration → Manage Service Applications → *your UPA* → **Administrators**). Without it, `CreateUserProfile` / profile reads fail with *"ProfileDBCacheServiceClient.GetUserData threw exception: Access is denied."* |
 | Active Directory | Network reachability to every AD forest you want to synchronize (LDAP/389 or LDAPS/636) |
 | Disk space | A `Logs/` folder is created next to each script (transcripts + per-error JSON files) |
 
