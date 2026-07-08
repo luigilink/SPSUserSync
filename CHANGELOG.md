@@ -5,7 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-06-28
+## [1.3.1] - 2026-07-08
+
+### Fixed
+
+- `SPSyncUserInfoList.ps1` no longer runs **silently** when the account executing it cannot enumerate the farm site collections (wrong service account / missing Shell Admin on a content database). Previously `Get-SPSite -Limit All` used `-ErrorAction SilentlyContinue` and the resulting `ACCESS_DENIED` (`E_ACCESSDENIED 0x80070005`), which the lazy collection only throws while enumerating, was caught and written **only** to the Windows Event Log — the operator saw an almost-empty screen while the script kept going and then emitted two confusing secondary errors (`Export-SPSUserReport` and `Copy-Item` on a JSON that was never written). The `SilentlyContinue` is removed, the error is now surfaced to the console/transcript **and** the Event Log with an actionable message (Shell Admin / correct service account), and the script fails fast. (#16)
+- `SPSyncUserInfoList.ps1` no longer overwrites or copies an **empty** snapshot. When zero users are collected (almost always a rights problem, not a genuinely empty farm), the previous good `SPSyncUserInfoListUserList.json` is left untouched, an explicit error is raised, and the HTML report and the remote copy are **skipped** (the script exits `1`) instead of pushing stale or empty data to the User Profile farm. (#16)
+
+### Added
+
+- `Test-SPSUserSyncReadiness.ps1` now includes a **"Site collection enumeration"** check: it walks `Get-SPSite -Limit All` and **FAILs** on `ACCESS_DENIED`, pointing at the Shell Admin / service account prerequisite. This is the exact permission `SPSyncUserInfoList.ps1` depends on and was the gap that let a wrong account through — the previous `Get-SPFarm` check only proves config-database access, whereas the real run reads every content database. (#16)
+- Pester regression tests for `Get-SPSUniqueUsers` covering the hardened behavior: a healthy farm writes the JSON and reports success; a zero-user result writes no JSON and raises an Error event; an `ACCESS_DENIED` while enumerating surfaces an actionable Error and writes no JSON. (#16)
 
 ### Added
 

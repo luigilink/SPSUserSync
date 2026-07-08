@@ -1,41 +1,46 @@
 # SPSUserSync - Release Notes
 
-## [1.3.0] - 2026-06-28
+## [1.3.1] - 2026-07-08
 
-This release adds optional parallel Active Directory resolution to
-`SPSyncUserInfoList.ps1`, for large multi-forest farms where the per-user LDAP
-round-trip dominates the runtime. It is opt-in and off by default, and the
-generated JSON is byte-for-byte identical whether parallel resolution is on or
-off (verified on a SharePoint Subscription Edition farm).
+This is a hardening release for `SPSyncUserInfoList.ps1`. It does not change the
+generated JSON for a correctly-permissioned account, but it makes a **wrong
+service account** (or a missing Shell Admin) fail loudly and early instead of
+silently. It follows a field case where the script was launched with an
+under-privileged account and produced no output and no visible error at all.
+
+### Fixed
+
+- **No more silent ACCESS_DENIED runs** (#16). `Get-SPSite -Limit All` no longer
+  uses `-ErrorAction SilentlyContinue`. When the running account cannot enumerate
+  the farm site collections, the `ACCESS_DENIED` (`E_ACCESSDENIED 0x80070005`) is
+  now surfaced to the **console/transcript** as well as the Windows Event Log,
+  with an actionable message pointing at the Shell Admin / correct service
+  account. Previously the error reached only the Event Log, so the operator saw an
+  almost-empty screen while the script kept running and then emitted two confusing
+  secondary errors on a JSON file that was never written.
+- **No more overwriting/copying an empty snapshot** (#16). When zero users are
+  collected — almost always a rights problem rather than a genuinely empty farm —
+  the previous good `SPSyncUserInfoListUserList.json` is left untouched, an
+  explicit error is raised, and the HTML report and the remote copy are **skipped**
+  (the script exits `1`) instead of pushing empty or stale data to the User
+  Profile farm.
 
 ### Added
 
-- **Parallel AD resolution** (#14). With `ParallelADResolution = $true` (new
-  setting, default `$false`), the unique user logins are resolved against AD
-  concurrently through a RunspacePool — Windows PowerShell 5.1 compatible, no
-  `ForEach-Object -Parallel` required. `MaxParallelADQueries` sets the degree of
-  parallelism (0 = auto from the CPU count). Off by default because on small
-  farms the per-runspace module-import overhead is not amortized. Two new public
-  helpers back it: `Resolve-SPSADUserBatch` (the RunspacePool resolver) and
-  `Get-SPSThrottleLimit` (CPU-based default). A measured ~8x speedup on a 40-user
-  mock with 100 ms LDAP latency.
-- `ConvertTo-SPSUserRecord` (#14) — the single `Get-SPSADUser` -> record
-  projection shared by both the sequential path and the parallel worker, which is
-  what guarantees the identical JSON.
-
-### Changed
-
-- `SPSyncUserInfoList.ps1` now resolves each **unique** login against AD exactly
-  once (previously once per web the user appeared in), by separating the
-  user-collection, AD-resolution and JSON-building passes. This also speeds up
-  the default sequential mode on farms where users span many sites. The
-  user-removal walk (`Set-SPUser` / `Remove-SPUser`) is unchanged and still runs
-  per web. (#14)
+- **Readiness site-collection enumeration check** (#16). `Test-SPSUserSyncReadiness.ps1`
+  now walks `Get-SPSite -Limit All` and **FAILs** on `ACCESS_DENIED`, pointing at
+  the Shell Admin / service account prerequisite. This is the exact permission
+  `SPSyncUserInfoList.ps1` depends on, and it plugs the gap left by the previous
+  `Get-SPFarm`-only check (which only proves config-database access, while the
+  real run reads every content database). Run the readiness check as the service
+  account before enabling the scheduled task to catch a wrong account up front.
+- **Regression tests** (#16) for `Get-SPSUniqueUsers`: healthy farm writes the JSON
+  and reports success; zero users writes no JSON and raises an Error event;
+  `ACCESS_DENIED` surfaces an actionable Error and writes no JSON.
 
 ### Upgrade notes
 
-- No action required: `ParallelADResolution` and `MaxParallelADQueries` are
-  optional and default to the previous (sequential) behavior. Add them to
-  `sync-settings.psd1` only when you want to enable parallel resolution.
-
-A full list of changes in each version can be found in the [change log](CHANGELOG.md)
+Drop-in replacement for 1.3.0 — no configuration change required. If you rely on a
+scheduled task, make sure the account it runs under is a **Shell Admin** on every
+content database (`Add-SPShellAdmin`); with 1.3.1 a wrong account now fails the run
+explicitly (exit code `1`) instead of silently producing nothing.
