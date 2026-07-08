@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'SPSUserSync.Common.psm1'
-    ModuleVersion     = '1.3.0'
+    ModuleVersion     = '1.3.1'
     GUID              = '97e2ce6d-509f-4916-846e-da2d5780765e'
     Author            = 'Jean-Cyril DROUHIN'
     CompanyName       = 'luigilink'

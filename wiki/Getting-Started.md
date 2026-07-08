@@ -74,7 +74,7 @@ cd D:\Tools\SCRIPTS\JOBS\SPSUserSync
 .\Test-SPSUserSyncReadiness.ps1
 ```
 
-It validates Administrator rights, PowerShell 5.1, the module import, the three config files and their required keys, that every `Credential` domain's DPAPI secret decrypts under the current account, that each AD domain binds over LDAP, that the SharePoint snap-in/farm are reachable, that the `SPSUserSync` Event Log is usable, and that the master-VM share is reachable.
+It validates Administrator rights, PowerShell 5.1, the module import, the three config files and their required keys, that every `Credential` domain's DPAPI secret decrypts under the current account, that each AD domain binds over LDAP, that the SharePoint snap-in/farm are reachable, **that the current account can enumerate every site collection** (the exact permission `SPSyncUserInfoList.ps1` needs — this catches a wrong service account or a missing Shell Admin on a content database before the first run), that the `SPSUserSync` Event Log is usable, and that the master-VM share is reachable.
 
 Useful switches:
 
