@@ -28,3 +28,5 @@ obj
 # Pester / PowerShell test artifacts
 *.coverage.xml
 *.testResults.xml
+testResults.xml
+test-results.xml
