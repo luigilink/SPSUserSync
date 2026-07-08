@@ -20,6 +20,10 @@
       (unless -SkipNetwork) that an LDAP bind succeeds.
     - That the SharePoint snap-in is available and the farm is reachable
       (unless -SkipSharePoint).
+    - That the current account can enumerate every site collection - the exact
+      permission SPSyncUserInfoList.ps1 needs. This catches a wrong service
+      account or a missing Shell Admin on a content database before the first run
+      (unless -SkipSharePoint).
     - That the current account can read the User Profile Service Application
       (a non-destructive profile-count read; UPA master only, unless
       -SkipNetwork).
@@ -413,6 +417,38 @@ else {
         }
         catch {
             Add-CheckResult -Section 'SharePoint' -Name 'Farm access' -Status 'FAIL' -Detail 'Get-SPFarm failed (not a farm member, or missing rights)'
+        }
+
+        # Site collection enumeration - the permission SPSyncUserInfoList.ps1
+        # actually depends on. Get-SPFarm above only proves config-database access;
+        # walking every SPSite forces a read of every CONTENT database, which is
+        # what throws ACCESS_DENIED (E_ACCESSDENIED 0x80070005) when the running
+        # account is not a Shell Admin on each content DB / is the wrong service
+        # account. Reproducing it here surfaces that mistake BEFORE the first real
+        # run instead of during it. Read-only: only each site Url is read, no web is
+        # opened and no user is touched.
+        try {
+            $allSiteUrls = @(Get-SPSite -Limit All -ErrorAction Stop | Select-Object -ExpandProperty Url)
+            $siteCount = $allSiteUrls.Count
+            if ($siteCount -eq 0) {
+                Add-CheckResult -Section 'SharePoint' -Name 'Site collection enumeration' -Status 'WARN' -Detail 'Get-SPSite -Limit All returned no site collection (unexpected on a populated farm)'
+            }
+            else {
+                Add-CheckResult -Section 'SharePoint' -Name 'Site collection enumeration' -Status 'PASS' -Detail "Can enumerate $siteCount site collection(s)"
+            }
+        }
+        catch {
+            $enumMessage = $_.Exception.Message
+            if ($null -ne $_.Exception.InnerException) {
+                $enumMessage = $_.Exception.InnerException.Message
+            }
+            if ($enumMessage -match 'Access is denied|denied|E_ACCESSDENIED|0x80070005|UnauthorizedAccess') {
+                $enumAccount = try { ([Security.Principal.WindowsIdentity]::GetCurrent()).Name } catch { $env:USERNAME }
+                Add-CheckResult -Section 'SharePoint' -Name 'Site collection enumeration' -Status 'FAIL' -Detail "Access denied enumerating site collections. The account '$enumAccount' must be a Shell Admin on every content database (Add-SPShellAdmin) and the correct SPSyncUserInfoList service account. This is the exact permission SPSyncUserInfoList.ps1 needs."
+            }
+            else {
+                Add-CheckResult -Section 'SharePoint' -Name 'Site collection enumeration' -Status 'FAIL' -Detail "Get-SPSite -Limit All failed: $enumMessage"
+            }
         }
 
         if (-not $SkipNetwork -and $null -ne $settings -and -not [string]::IsNullOrEmpty($settings.MySiteUrl)) {

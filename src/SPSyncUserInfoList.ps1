@@ -130,6 +130,12 @@ function Get-SPSUniqueUsers {
     $tbSPSDeletedUser = New-Object -TypeName System.Collections.ArrayList
     $funcStarted      = Get-Date
 
+    # Success signal consumed by the Main region: set to $true only once a
+    # non-empty JSON snapshot has actually been written. The downstream HTML report
+    # and the remote copy are skipped when this stays $false, so a failed or empty
+    # run never overwrites or propagates the previous good file.
+    $script:GetSPSUniqueUsersSucceeded = $false
+
     Write-Output '--------------------------------------------------------------'
     Write-Output "Get Unique SPUser - Started at $funcStarted"
 
@@ -138,7 +144,7 @@ function Get-SPSUniqueUsers {
             $getSPSites = Get-SPSite -Limit All | Where-Object -FilterScript { $_.Url -like "$FilterUrl" }
         }
         else {
-            $getSPSites = Get-SPSite -Limit All -ErrorAction SilentlyContinue
+            $getSPSites = Get-SPSite -Limit All
         }
 
         # Built-in safety exclusions: these classic system principals are never
@@ -306,8 +312,32 @@ Exception: $_
 
         Write-Output "$spUsersFound users found in all SPSite object"
         Write-Output "$($tbSPSiteUsers.Count) unique users added in PSObject variable"
-        $tbSPSiteUsers | ConvertTo-Json | Set-Content -Path $JsonFilePath -Force -Encoding UTF8
-        Write-Output "Saved Unique SPUser in file: $JsonFilePath"
+
+        # Anti-clobber guard: a zero-user result almost always means a site
+        # collection could not be read (wrong account / missing Shell Admin), not a
+        # genuinely empty farm. Never overwrite the previous good JSON with an empty
+        # snapshot: keep it in place, fail loudly, and leave the success flag $false
+        # so the Main region skips the report and the remote copy.
+        if ($tbSPSiteUsers.Count -eq 0) {
+            $emptyMessage = @"
+No users were collected from the farm; the generated snapshot would be empty.
+FilterUrl: $FilterUrl
+This usually means the account running this script cannot read the site
+collections (check Shell Admin / the service account), not that the farm is
+empty. The existing JSON file was left untouched and nothing was copied
+downstream.
+"@
+            # -ErrorAction Continue keeps this non-terminating even when the caller
+            # sets $ErrorActionPreference = 'Stop': it must not be swallowed by this
+            # same try/catch, and the Main region owns the fail-fast Exit 1.
+            Write-Error -Message $emptyMessage -ErrorAction Continue
+            Add-SPSUserSyncEvent -Message $emptyMessage -Source 'Get-SPSUniqueUsers' -EntryType 'Error'
+        }
+        else {
+            $tbSPSiteUsers | ConvertTo-Json | Set-Content -Path $JsonFilePath -Force -Encoding UTF8
+            Write-Output "Saved Unique SPUser in file: $JsonFilePath"
+            $script:GetSPSUniqueUsersSucceeded = $true
+        }
 
         if ($tbSPSDeletedUser.Count -ne 0) {
             Write-Output "$($tbSPSDeletedUser.Count) deleted users added in PSObject variable"
@@ -316,11 +346,35 @@ Exception: $_
         }
     }
     catch {
-        $catchMessage = @"
+        $errorDetail = $_
+        # ACCESS_DENIED while enumerating the site collections is the classic
+        # wrong-account / missing-Shell-Admin case (E_ACCESSDENIED 0x80070005). Give
+        # an actionable message instead of a raw stack trace.
+        $isAccessDenied = ($errorDetail.Exception -is [System.UnauthorizedAccessException]) -or
+        ("$errorDetail" -match 'Access is denied|E_ACCESSDENIED|0x80070005|UnauthorizedAccess')
+        if ($isAccessDenied) {
+            $runAccount = try { ([Security.Principal.WindowsIdentity]::GetCurrent()).Name } catch { $env:USERNAME }
+            $catchMessage = @"
+Access denied while enumerating the farm site collections in Get-SPSUniqueUsers.
+FilterUrl: $FilterUrl
+The account running this script ('$runAccount') cannot read every site collection.
+Make sure it is a Shell Admin on every content database (Add-SPShellAdmin) and is
+the correct SPSyncUserInfoList service account, then re-run.
+Exception: $errorDetail
+"@
+        }
+        else {
+            $catchMessage = @"
 An error occurred during Get-SPSUniqueUsers
 FilterUrl: $FilterUrl
-Exception: $_
+Exception: $errorDetail
 "@
+        }
+        # Surface to the console/transcript as well as the Event Log, so an operator
+        # watching the run sees the failure immediately instead of an empty screen.
+        # -ErrorAction Continue keeps it non-terminating even under a caller's
+        # $ErrorActionPreference = 'Stop' (the Main region handles the Exit 1).
+        Write-Error -Message $catchMessage -ErrorAction Continue
         Add-SPSUserSyncEvent -Message $catchMessage -Source 'Get-SPSUniqueUsers' -EntryType 'Error'
     }
 
@@ -409,6 +463,32 @@ if ([string]::IsNullOrEmpty($FilterUrl)) {
 }
 else {
     Get-SPSUniqueUsers -FilterUrl $FilterUrl -Settings $settings -JsonFilePath $pathJsonFile -DeletedJsonFilePath $pathUserDeletedFile
+}
+
+# Guard: stop here when the snapshot was not produced (for example the running
+# account cannot enumerate the site collections). Running the compare, report and
+# copy steps against a missing snapshot only emits confusing secondary errors, and
+# copying the previous file would push stale data to the User Profile farm. Fail
+# loudly and skip the rest.
+if (-not $script:GetSPSUniqueUsersSucceeded) {
+    $failMessage = @"
+User snapshot was NOT generated for AppCode '$appCode'.
+The most common cause is that the account running this script cannot enumerate the
+farm site collections (ACCESS_DENIED). Make sure it is a Shell Admin on every
+content database (Add-SPShellAdmin) and is the correct SPSyncUserInfoList service
+account, then re-run. See the error above and the Windows Event Log 'SPSUserSync'
+for details. The HTML report and the remote copy were skipped.
+"@
+    Write-Error -Message $failMessage -ErrorAction Continue
+    Add-SPSUserSyncEvent -Message $failMessage -Source 'SPSyncUserInfoList' -EntryType 'Error'
+
+    Write-Output '-----------------------------------------------'
+    Write-Output '| Automated Script - Configuration SPSyncUserInfoList (FAILED)'
+    Write-Output "| Started on       - $($ctx.DateStarted) |"
+    Write-Output "| Completed on     - $(Get-Date) |"
+    Write-Output '-----------------------------------------------'
+    Stop-Transcript | Out-Null
+    Exit 1
 }
 
 # Compare the fresh snapshot against the previous one and warn on an abnormal drop
