@@ -8,6 +8,12 @@
         SPSyncUserProfile.ps1 when you only need to know whether the user
         still exists in Active Directory before calling CreateUserProfile.
 
+        Returns $true when the user resolves to an AD entry and $false when the
+        search ran but found nothing. A configuration/secret/connection error is
+        NOT reported as $false: it propagates (Get-SPSADUser throws a terminating
+        'SPSADConfigError'), so the caller can tell "cannot verify" apart from
+        "does not exist" and refuse to silently skip a real user.
+
         .PARAMETER UserLogin
         The raw SharePoint user login, in claim or DOMAIN\user form.
 

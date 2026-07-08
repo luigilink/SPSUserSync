@@ -14,8 +14,12 @@
         ad-domains.psd1. Both templates accept {0} as the placeholder for the
         account name.
 
-        Returns $null when configuration is missing or invalid so the caller
-        can decide whether to skip or escalate.
+        Throws on a hard misconfiguration (config file unreadable, a configured
+        domain with no LdapPath, or a Credential-mode domain whose CredentialKey
+        or secret is missing/undecodable) so the caller can surface a clear
+        configuration error instead of silently treating it as "user not found".
+        Returns $null only for the benign case of a domain that is not configured
+        and for which no Default entry exists (a login to skip).
 
         .PARAMETER DomainName
         Domain key as it appears in ad-domains.psd1 (case-insensitive). When
@@ -53,8 +57,7 @@
         $config = Get-SPSADDomainConfig -ConfigPath $ConfigPath
     }
     catch {
-        Write-Warning -Message "Get-SPSADConnection: $($_.Exception.Message)"
-        return $null
+        throw "Get-SPSADConnection: unable to load the AD domain configuration. $($_.Exception.Message)"
     }
 
     $domainKey   = $DomainName.ToLower()
@@ -73,8 +76,7 @@
     }
 
     if ([string]::IsNullOrEmpty($domainEntry.LdapPath)) {
-        Write-Warning -Message "Domain '$DomainName' has no LdapPath defined."
-        return $null
+        throw "Domain '$DomainName' has no LdapPath defined in ad-domains.psd1."
     }
 
     $authMode      = if ($domainEntry.AuthMode) { $domainEntry.AuthMode } else { 'Default' }
@@ -84,14 +86,14 @@
     $directoryEntry = $null
     if ($authMode -eq 'Credential') {
         if ([string]::IsNullOrEmpty($domainEntry.CredentialKey)) {
-            Write-Warning -Message "Domain '$DomainName' uses AuthMode 'Credential' but no CredentialKey is defined."
-            return $null
+            throw "Domain '$DomainName' uses AuthMode 'Credential' but no CredentialKey is defined in ad-domains.psd1."
         }
 
+        # Get-SPSSecret throws on an undecodable/placeholder/no-Username secret; a
+        # $null here means the CredentialKey is absent from secrets.psd1 entirely.
         $credential = Get-SPSSecret -CredentialKey $domainEntry.CredentialKey -ConfigPath $ConfigPath
         if ($null -eq $credential) {
-            Write-Warning -Message "Domain '$DomainName' requires credential '$($domainEntry.CredentialKey)' but it is missing from secrets.psd1."
-            return $null
+            throw "Domain '$DomainName' requires credential '$($domainEntry.CredentialKey)' but it is missing from secrets.psd1."
         }
 
         $plainPassword = $credential.GetNetworkCredential().Password

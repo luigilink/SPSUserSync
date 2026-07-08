@@ -17,6 +17,7 @@
         'ConvertTo-SPSUserRecord'
         'Export-SPSUserReport'
         'Get-SPSADConnection'
+        'Get-SPSADConnectionError'
         'Get-SPSADUser'
         'Get-SPSInstalledProductVersion'
         'Get-SPSSyncSetting'

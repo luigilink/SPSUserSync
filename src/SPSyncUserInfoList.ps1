@@ -270,8 +270,24 @@ Exception: $_
         $resolvedByLogin = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::Ordinal)
         if ($parallelADResolution -and $uniqueLogins.Count -gt 0) {
             Write-Output "Resolving $($uniqueLogins.Count) unique users against AD in parallel..."
+            $configErrorLogins = [System.Collections.Generic.List[System.String]]::new()
             foreach ($resolved in (Resolve-SPSADUserBatch -UserLogin $uniqueLogins -ThrottleLimit $adThrottleLimit)) {
                 $resolvedByLogin[$resolved.UserLogin] = $resolved
+                if ($resolved.ConfigError) {
+                    $configErrorLogins.Add($resolved.UserLogin)
+                }
+            }
+            # A configuration/secret error (e.g. an undecodable secrets.psd1 entry)
+            # affects whole forests, not single users, and would otherwise ship a JSON
+            # with empty-name records for that forest. Fail loudly so the outer catch
+            # surfaces it, no JSON is written, and the operator fixes secrets.psd1 and
+            # re-runs — instead of silently degrading a whole domain.
+            if ($configErrorLogins.Count -gt 0) {
+                $affectedDomains = ($configErrorLogins | ForEach-Object {
+                        $tail = ($_ -split '\|')[-1]
+                        if ($tail -match '\\') { ($tail -split '\\')[0] } else { $tail }
+                    } | Sort-Object -Unique) -join ', '
+                throw "Active Directory resolution failed with a configuration/secret error for $($configErrorLogins.Count) user(s) across domain(s): $affectedDomains. Ensure secrets.psd1 is regenerated on THIS server, as the service account (DPAPI is per machine+account); run Test-SPSUserSyncReadiness.ps1 to confirm before re-running."
             }
         }
         else {

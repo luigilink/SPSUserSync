@@ -15,7 +15,11 @@
         objects are not thread-safe), resolves them concurrently through a
         RunspacePool, and returns one result object per input login with the AD
         attributes SPSUserSync relies on (DisplayName, FirstName, LastName, Email,
-        Country, Location) plus Resolved/Error.
+        Country, Location) plus Resolved/Error. When a lookup fails because of a
+        configuration or secret problem (Get-SPSADUser throws 'SPSADConfigError',
+        e.g. an undecodable secrets.psd1 entry), the result also carries
+        ConfigError = $true so the caller can fail the whole run loudly instead of
+        shipping a JSON with an empty-name forest.
 
         Only the AD resolution runs in parallel. Reading SharePoint users and
         writing them back (Set-SPUser / Remove-SPUser) stays sequential in the
@@ -122,6 +126,7 @@
                     Location    = $null
                     Resolved    = $false
                     Error       = $_.Exception.Message
+                    ConfigError = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
                 }
             }
         }
@@ -174,6 +179,7 @@
                         Location    = $null
                         Resolved    = $false
                         Error       = $_.Exception.Message
+                        ConfigError = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
                     })
             }
             finally {

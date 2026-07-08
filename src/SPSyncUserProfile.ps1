@@ -16,6 +16,12 @@
     - Users missing FirstName, LastName or Email in the input JSON are
       written to a separate JSON for follow-up.
 
+    Before processing, the script pre-flights the Active Directory configuration
+    once per forest present in the input: if a forest's secrets.psd1 entry cannot
+    be decoded on this server (DPAPI SecureStrings are bound to the machine and
+    account that created them), the run stops immediately with an actionable
+    message instead of silently downgrading every affected user to UNKNOWN_USER.
+
     The script is the multi-forest alternative to the built-in User Profile
     AD Import (UPA AD Import): it does not require a sync-time bind across
     every forest because the AD lookup has already been performed on the
@@ -315,6 +321,26 @@ if ($null -eq $getMysiteHost) {
 # Filter users with prerequisites
 $usersWithPrerequisites    = $psoSPSiteUsers | Where-Object -FilterScript { -not ([string]::IsNullOrEmpty($_.FirstName) -or [string]::IsNullOrEmpty($_.LastName) -or [string]::IsNullOrEmpty($_.Email)) }
 $usersWithoutPrerequisites = $psoSPSiteUsers | Where-Object -FilterScript { [string]::IsNullOrEmpty($_.FirstName) -or [string]::IsNullOrEmpty($_.LastName) -or [string]::IsNullOrEmpty($_.Email) }
+
+# Pre-flight the AD configuration once per forest BEFORE the loop. Profiles are only
+# created for users that still resolve in AD (Test-SPSADUser), so a secrets.psd1 that
+# cannot be decoded on THIS server would otherwise downgrade every affected user to
+# UNKNOWN_USER, silently, one Event-Log line at a time. Validate each distinct forest
+# up front and fail fast with an actionable message instead.
+$preflightErrors = @(Get-SPSADConnectionError -UserLogin @($usersWithPrerequisites.UserLogin))
+if ($preflightErrors.Count -ne 0) {
+    $preflightDetail = ($preflightErrors | ForEach-Object { "$($_.Domain) - $($_.Error)" }) -join "`r`n"
+    $failMessage = @"
+User Profile sync aborted: the Active Directory configuration/secret could not be validated on this server for $($preflightErrors.Count) forest(s):
+$preflightDetail
+
+secrets.psd1 must be regenerated on THIS server, as the service account that runs this script (DPAPI SecureStrings are bound to the machine + account that created them). Run Test-SPSUserSyncReadiness.ps1 here to confirm, then re-run. Without this, users in these forests would be silently skipped as UNKNOWN_USER.
+"@
+    Write-Error -Message $failMessage -ErrorAction Continue
+    Add-SPSUserSyncEvent -Message $failMessage -Source 'SPSyncUserProfile' -EntryType 'Error'
+    Stop-Transcript | Out-Null
+    Exit 1
+}
 
 # Process eligible users
 $tbSPSUserProfileMgmt = New-Object -TypeName System.Collections.ArrayList

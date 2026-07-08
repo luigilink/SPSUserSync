@@ -343,7 +343,7 @@ if ($moduleOk -and $null -ne $adDomains -and $adDomains.ContainsKey('Domains')) 
             continue
         }
         if ($null -eq $searcher) {
-            Add-CheckResult -Section 'AD' -Name "Domain '$domainKey' connection" -Status 'FAIL' -Detail 'Get-SPSADConnection returned null (check LDAP path / credential)'
+            Add-CheckResult -Section 'AD' -Name "Domain '$domainKey' connection" -Status 'FAIL' -Detail 'Domain not configured and no Default entry (logins would be skipped)'
             continue
         }
         if ($SkipNetwork) {
