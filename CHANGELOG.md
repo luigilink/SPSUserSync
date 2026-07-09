@@ -5,10 +5,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-07-09
+
+### Added
+
+- **AD account status detection** (#21). `ConvertTo-SPSUserRecord` now reads the
+  universal `userAccountControl` attribute and exposes two additive fields on every
+  resolved record — `AccountStatus` (`Active` / `Disabled` / `NotFound`) and
+  `Enabled` — and `SPSyncUserInfoList.ps1` carries `AccountStatus` into the JSON
+  snapshot. The classification relies only on `userAccountControl` bit `0x2`
+  (ACCOUNTDISABLE) and the null-lookup result, so it works for every customer with
+  no dependency on their leaver process (no dedicated OU, naming convention, HR
+  feed or retention policy). A resolved account whose entry has no
+  `userAccountControl` (some non-AD LDAP directories) is treated as `Active`,
+  unchanged from before.
+- **`SkipDisabledUsers`** (optional, in `sync-settings.psd1`, default `$false`).
+  When `$true`, `SPSyncUserProfile.ps1` no longer creates or updates a User Profile
+  for an account flagged `Disabled` in the snapshot; the account is written to the
+  Not-Added report instead. This handles departed employees kept as *disabled* AD
+  accounts (and retained in the SharePoint User Information List for permission
+  history) without provisioning profiles for them. Default `$false` preserves the
+  previous behaviour. (#21)
+- **Not-Added reason** (#21). Each entry in the `SPSyncUserNotAddedInUSPList*.json`
+  is now tagged with a `NotAddedReason` — `AD_NOT_FOUND` (the account no longer
+  resolves in AD: deleted/departed, or a forest not declared in `ad-domains.psd1`),
+  `MISSING_ATTRIBUTES` (resolved but `FirstName`/`LastName`/`Email` is empty) or
+  `DISABLED` — so an expected miss (a departed account) can be told apart from an
+  actionable one, and the run summary prints the breakdown.
+- The `SPSyncUserInfoList` **HTML report** now shows an *AD Status* column and a
+  *Disabled in AD* summary card, with a note pointing at `SkipDisabledUsers`, so the
+  disabled (departed-but-retained) accounts are visible at a glance. (#21)
+
 ### Changed
 
 - Bump `actions/checkout` to `v7` across all workflows (`pester.yml`, `release.yml`, `wiki.yml`), replacing the previous `v4` pins that relied on the deprecated Node.js 20 runtime. (#22)
 - Bump `actions/upload-artifact` to `v7` (in `pester.yml`) and `softprops/action-gh-release` to `v3` (in `release.yml`) for the same reason. CI-only change with no impact on the packaged module, scripts, or release artifact. (#22)
+
+### Notes
+
+- The `AccountStatus` field is additive; existing consumers ignore it. `SkipDisabledUsers`
+  acts on the `AccountStatus` written by `SPSyncUserInfoList.ps1` 1.3.3+, so regenerate the
+  JSON snapshot after upgrading for the flag to take effect (a pre-1.3.3 snapshot has no
+  status, and no user is skipped as disabled until then).
 
 ## [1.3.2] - 2026-07-08
 
