@@ -14,8 +14,21 @@
         ad-domains.psd1. Both templates accept {0} as the placeholder for the
         account name.
 
-        Returns $null when configuration is missing or invalid so the caller
-        can decide whether to skip or escalate.
+        The per-domain AuthenticationType (optional) maps to
+        System.DirectoryServices.AuthenticationTypes and is passed as the bind
+        authentication type. It defaults to 'Secure' (integrated Kerberos/NTLM,
+        suitable for AD forests). A non-AD LDAP directory may need 'None' (a plain
+        simple bind) or 'SecureSocketsLayer' (LDAPS on port 636). The value is
+        parsed case-insensitively and may combine flags (e.g.
+        'SecureSocketsLayer, ServerBind'); an unknown value throws rather than
+        silently falling back.
+
+        Throws on a hard misconfiguration (config file unreadable, a configured
+        domain with no LdapPath, or a Credential-mode domain whose CredentialKey
+        or secret is missing/undecodable) so the caller can surface a clear
+        configuration error instead of silently treating it as "user not found".
+        Returns $null only for the benign case of a domain that is not configured
+        and for which no Default entry exists (a login to skip).
 
         .PARAMETER DomainName
         Domain key as it appears in ad-domains.psd1 (case-insensitive). When
@@ -53,8 +66,7 @@
         $config = Get-SPSADDomainConfig -ConfigPath $ConfigPath
     }
     catch {
-        Write-Warning -Message "Get-SPSADConnection: $($_.Exception.Message)"
-        return $null
+        throw "Get-SPSADConnection: unable to load the AD domain configuration. $($_.Exception.Message)"
     }
 
     $domainKey   = $DomainName.ToLower()
@@ -73,25 +85,40 @@
     }
 
     if ([string]::IsNullOrEmpty($domainEntry.LdapPath)) {
-        Write-Warning -Message "Domain '$DomainName' has no LdapPath defined."
-        return $null
+        throw "Domain '$DomainName' has no LdapPath defined in ad-domains.psd1."
     }
 
-    $authMode      = if ($domainEntry.AuthMode) { $domainEntry.AuthMode } else { 'Default' }
-    $authTypeName  = if ($domainEntry.AuthenticationType) { $domainEntry.AuthenticationType } else { 'Secure' }
-    $authType      = [System.DirectoryServices.AuthenticationTypes]::$authTypeName
+    $authMode = if ($domainEntry.AuthMode) { $domainEntry.AuthMode } else { 'Default' }
+
+    # AuthenticationType maps to System.DirectoryServices.AuthenticationTypes and is
+    # passed as the 4th DirectoryEntry argument. Default 'Secure' suits AD forests;
+    # a non-AD LDAP directory may need 'None' (simple bind) or
+    # 'SecureSocketsLayer' (LDAPS on :636). Parse case-insensitively and accept flag
+    # combinations (e.g. 'SecureSocketsLayer, ServerBind'); a typo must fail loudly.
+    # NB: use [Enum]::Parse(Type, string, ignoreCase) - the non-generic
+    # [Enum]::TryParse(Type, string, bool, [ref]) overload only exists on .NET Core /
+    # .NET 5+, not on the .NET Framework that hosts Windows PowerShell 5.1.
+    $authTypeName = if ($domainEntry.AuthenticationType) { $domainEntry.AuthenticationType } else { 'Secure' }
+    try {
+        $authType = [System.DirectoryServices.AuthenticationTypes][System.Enum]::Parse(
+            [System.DirectoryServices.AuthenticationTypes], $authTypeName, $true)
+    }
+    catch {
+        $validNames = ([System.Enum]::GetNames([System.DirectoryServices.AuthenticationTypes])) -join ', '
+        throw "Domain '$DomainName' has an invalid AuthenticationType '$authTypeName' in ad-domains.psd1. Valid values (comma-combinable): $validNames."
+    }
 
     $directoryEntry = $null
     if ($authMode -eq 'Credential') {
         if ([string]::IsNullOrEmpty($domainEntry.CredentialKey)) {
-            Write-Warning -Message "Domain '$DomainName' uses AuthMode 'Credential' but no CredentialKey is defined."
-            return $null
+            throw "Domain '$DomainName' uses AuthMode 'Credential' but no CredentialKey is defined in ad-domains.psd1."
         }
 
+        # Get-SPSSecret throws on an undecodable/placeholder/no-Username secret; a
+        # $null here means the CredentialKey is absent from secrets.psd1 entirely.
         $credential = Get-SPSSecret -CredentialKey $domainEntry.CredentialKey -ConfigPath $ConfigPath
         if ($null -eq $credential) {
-            Write-Warning -Message "Domain '$DomainName' requires credential '$($domainEntry.CredentialKey)' but it is missing from secrets.psd1."
-            return $null
+            throw "Domain '$DomainName' requires credential '$($domainEntry.CredentialKey)' but it is missing from secrets.psd1."
         }
 
         $plainPassword = $credential.GetNetworkCredential().Password
@@ -103,7 +130,22 @@
         )
     }
     else {
-        $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry $domainEntry.LdapPath
+        # Integrated auth (no explicit credential). Preserve the exact original
+        # 1-arg construction for domains that do not set AuthenticationType (zero
+        # behaviour change for existing AD forests). Only when AuthenticationType is
+        # explicitly configured do we pass it through, with $null/$null keeping the
+        # calling thread's security context, so it is honoured rather than ignored.
+        if ($domainEntry.AuthenticationType) {
+            $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry(
+                $domainEntry.LdapPath,
+                $null,
+                $null,
+                $authType
+            )
+        }
+        else {
+            $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry $domainEntry.LdapPath
+        }
     }
 
     $filterTemplate = if (-not [string]::IsNullOrEmpty($domainEntry.LdapFilterTemplate)) {

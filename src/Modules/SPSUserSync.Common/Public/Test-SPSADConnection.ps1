@@ -15,7 +15,7 @@
 
         By default it runs a generic probe that matches any user, reusing the
         domain's own LDAP filter template with '*' as the account placeholder (so it
-        works for Active Directory and for custom directories such as RGA-style
+        works for Active Directory and for custom directories such as non-AD
         'uid=*' filters alike). Pass -SampleAccount to instead resolve one specific,
         known account and confirm its attributes.
 
@@ -79,7 +79,7 @@
     try {
         $searcher = Get-SPSADConnection -DomainName $DomainName -AccountName $accountName -ConfigPath $ConfigPath
         if ($null -eq $searcher) {
-            $result.Error = 'Get-SPSADConnection returned null (check LDAP path / credential configuration)'
+            $result.Error = 'Domain is not configured in ad-domains.psd1 and no Default entry exists (logins in this domain would be skipped)'
             return $result
         }
 

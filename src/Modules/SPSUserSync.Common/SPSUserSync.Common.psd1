@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'SPSUserSync.Common.psm1'
-    ModuleVersion     = '1.3.1'
+    ModuleVersion     = '1.3.2'
     GUID              = '97e2ce6d-509f-4916-846e-da2d5780765e'
     Author            = 'Jean-Cyril DROUHIN'
     CompanyName       = 'luigilink'
@@ -17,6 +17,7 @@
         'ConvertTo-SPSUserRecord'
         'Export-SPSUserReport'
         'Get-SPSADConnection'
+        'Get-SPSADConnectionError'
         'Get-SPSADUser'
         'Get-SPSInstalledProductVersion'
         'Get-SPSSyncSetting'
