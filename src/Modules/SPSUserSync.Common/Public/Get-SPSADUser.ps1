@@ -87,11 +87,11 @@ Exception: $($_.Exception.Message)
     # The connection is valid; a failure now is an LDAP/query/bind error (server
     # unreachable, referral, bad path). This is a CONNECTIVITY problem, not a
     # deployment/secret one: it can be transient and can affect only one external
-    # directory (e.g. RGA reachable from an application farm but not from the UPA
-    # master). Keep it NON-fatal - log it and return $null so the run isolates this
-    # login and continues, exactly as before. Only the connection-BUILD failure
-    # above (missing LdapPath / CredentialKey / undecodable secret) is fatal, so a
-    # flaky forest never nukes a whole multi-forest run. (Distinguishing a whole
+    # directory (e.g. a partner LDAP reachable from an application farm but not from
+    # the UPA master). Keep it NON-fatal - log it and return $null so the run
+    # isolates this login and continues, exactly as before. Only the connection-BUILD
+    # failure above (missing LdapPath / CredentialKey / undecodable secret) is fatal,
+    # so a flaky forest never nukes a whole multi-forest run. (Distinguishing a whole
     # forest being unreachable and trusting the JSON on the profile side is a
     # separate, opt-in refinement tracked for a later release.)
     try {

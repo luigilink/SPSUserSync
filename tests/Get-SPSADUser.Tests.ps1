@@ -2,7 +2,7 @@
 #
 # The goal is the distinction that a broken deployment (an undecodable secrets.psd1
 # entry, a missing LdapPath/CredentialKey) must FAIL LOUD, while a runtime
-# connectivity error (server not operational, referral - e.g. an external RGA-style
+# connectivity error (server not operational, referral - e.g. an external non-AD
 # directory) stays NON-fatal and simply leaves the login unresolved. These run
 # cross-platform: every AD/LDAP call is mocked inside the module scope. Each mock
 # builds its own searcher object inline, because a Pester mock body runs in the
@@ -30,7 +30,7 @@ Describe 'Get-SPSADUser configuration vs connectivity (issue #18)' {
 
     It 'returns $null (non-fatal) when the LDAP query fails for connectivity (server not operational)' {
         InModuleScope SPSUserSync.Common {
-            Mock ConvertFrom-SPSUserLogin { [PSCustomObject]@{ IsValid = $true; Domain = 'rga'; Account = 'u1' } }
+            Mock ConvertFrom-SPSUserLogin { [PSCustomObject]@{ IsValid = $true; Domain = 'partners'; Account = 'u1' } }
             Mock Get-SPSADConnection {
                 $s = [PSCustomObject]@{}
                 $s | Add-Member -MemberType ScriptMethod -Name FindOne -Value { throw 'The server is not operational.' }
@@ -39,7 +39,7 @@ Describe 'Get-SPSADUser configuration vs connectivity (issue #18)' {
             Mock Add-SPSUserSyncEvent { }
 
             # Must NOT throw (a flaky external forest never nukes the run) but must log.
-            $result = Get-SPSADUser -UserLogin 'i:0#.w|rga\u1'
+            $result = Get-SPSADUser -UserLogin 'i:0#.w|partners\u1'
             $result | Should -BeNullOrEmpty
             Should -Invoke Add-SPSUserSyncEvent -Times 1 -ParameterFilter { $EntryType -eq 'Error' }
         }
@@ -143,6 +143,33 @@ Describe 'Get-SPSADConnectionError pre-flight (issue #18)' {
             # SHAREPOINT is a DOMAIN\user shape, so it IS probed; the claim login is skipped.
             Should -Invoke Get-SPSADConnection -Times 1
             $errors.Count | Should -Be 0
+        }
+    }
+}
+Describe 'Get-SPSADConnection AuthenticationType validation (issue #20)' {
+    It 'throws a clear error listing valid names when AuthenticationType is invalid' {
+        InModuleScope SPSUserSync.Common {
+            Mock Get-SPSADDomainConfig {
+                @{ Domains = @{ 'bad' = @{ LdapPath = 'LDAP://x'; AuthMode = 'Default'; AuthenticationType = 'Bogus' } }; Default = $null; DefaultFilterTemplate = $null }
+            }
+            $err = $null
+            try { Get-SPSADConnection -DomainName 'bad' -AccountName 'u' } catch { $err = $_ }
+            $err | Should -Not -BeNullOrEmpty
+            $err.Exception.Message | Should -Match 'invalid AuthenticationType'
+            $err.Exception.Message | Should -Match 'None'
+        }
+    }
+
+    It 'does not reject a valid AuthenticationType at validation time' {
+        InModuleScope SPSUserSync.Common {
+            Mock Get-SPSADDomainConfig {
+                @{ Domains = @{ 'ok' = @{ LdapPath = 'LDAP://x'; AuthMode = 'Default'; AuthenticationType = 'None' } }; Default = $null; DefaultFilterTemplate = $null }
+            }
+            # DirectoryEntry construction may be unsupported on the test platform; the
+            # point is that a valid type must NOT be flagged as invalid by validation.
+            $err = $null
+            try { $null = Get-SPSADConnection -DomainName 'ok' -AccountName 'u' } catch { $err = $_ }
+            if ($err) { $err.Exception.Message | Should -Not -Match 'invalid AuthenticationType' }
         }
     }
 }

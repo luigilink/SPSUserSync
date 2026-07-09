@@ -14,6 +14,15 @@
         ad-domains.psd1. Both templates accept {0} as the placeholder for the
         account name.
 
+        The per-domain AuthenticationType (optional) maps to
+        System.DirectoryServices.AuthenticationTypes and is passed as the bind
+        authentication type. It defaults to 'Secure' (integrated Kerberos/NTLM,
+        suitable for AD forests). A non-AD LDAP directory may need 'None' (a plain
+        simple bind) or 'SecureSocketsLayer' (LDAPS on port 636). The value is
+        parsed case-insensitively and may combine flags (e.g.
+        'SecureSocketsLayer, ServerBind'); an unknown value throws rather than
+        silently falling back.
+
         Throws on a hard misconfiguration (config file unreadable, a configured
         domain with no LdapPath, or a Credential-mode domain whose CredentialKey
         or secret is missing/undecodable) so the caller can surface a clear
@@ -79,9 +88,20 @@
         throw "Domain '$DomainName' has no LdapPath defined in ad-domains.psd1."
     }
 
-    $authMode      = if ($domainEntry.AuthMode) { $domainEntry.AuthMode } else { 'Default' }
-    $authTypeName  = if ($domainEntry.AuthenticationType) { $domainEntry.AuthenticationType } else { 'Secure' }
-    $authType      = [System.DirectoryServices.AuthenticationTypes]::$authTypeName
+    $authMode = if ($domainEntry.AuthMode) { $domainEntry.AuthMode } else { 'Default' }
+
+    # AuthenticationType maps to System.DirectoryServices.AuthenticationTypes and is
+    # passed as the 4th DirectoryEntry argument. Default 'Secure' suits AD forests;
+    # a non-AD LDAP directory may need 'None' (simple bind) or
+    # 'SecureSocketsLayer' (LDAPS on :636). Parse case-insensitively and accept flag
+    # combinations (e.g. 'SecureSocketsLayer, ServerBind'); a typo must fail loudly
+    # instead of silently yielding $null via the static accessor.
+    $authTypeName = if ($domainEntry.AuthenticationType) { $domainEntry.AuthenticationType } else { 'Secure' }
+    $authType     = [System.DirectoryServices.AuthenticationTypes]::Secure
+    if (-not [System.Enum]::TryParse([System.DirectoryServices.AuthenticationTypes], $authTypeName, $true, [ref]$authType)) {
+        $validNames = ([System.Enum]::GetNames([System.DirectoryServices.AuthenticationTypes])) -join ', '
+        throw "Domain '$DomainName' has an invalid AuthenticationType '$authTypeName' in ad-domains.psd1. Valid values (comma-combinable): $validNames."
+    }
 
     $directoryEntry = $null
     if ($authMode -eq 'Credential') {
@@ -105,7 +125,22 @@
         )
     }
     else {
-        $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry $domainEntry.LdapPath
+        # Integrated auth (no explicit credential). Preserve the exact original
+        # 1-arg construction for domains that do not set AuthenticationType (zero
+        # behaviour change for existing AD forests). Only when AuthenticationType is
+        # explicitly configured do we pass it through, with $null/$null keeping the
+        # calling thread's security context, so it is honoured rather than ignored.
+        if ($domainEntry.AuthenticationType) {
+            $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry(
+                $domainEntry.LdapPath,
+                $null,
+                $null,
+                $authType
+            )
+        }
+        else {
+            $directoryEntry = New-Object System.DirectoryServices.DirectoryEntry $domainEntry.LdapPath
+        }
     }
 
     $filterTemplate = if (-not [string]::IsNullOrEmpty($domainEntry.LdapFilterTemplate)) {

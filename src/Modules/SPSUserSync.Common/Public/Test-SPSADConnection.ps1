@@ -15,7 +15,7 @@
 
         By default it runs a generic probe that matches any user, reusing the
         domain's own LDAP filter template with '*' as the account placeholder (so it
-        works for Active Directory and for custom directories such as RGA-style
+        works for Active Directory and for custom directories such as non-AD
         'uid=*' filters alike). Pass -SampleAccount to instead resolve one specific,
         known account and confirm its attributes.
 
