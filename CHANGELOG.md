@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `actions/checkout` to `v7` across all workflows (`pester.yml`, `release.yml`, `wiki.yml`), replacing the previous `v4` pins that relied on the deprecated Node.js 20 runtime. (#22)
+- Bump `actions/upload-artifact` to `v7` (in `pester.yml`) and `softprops/action-gh-release` to `v3` (in `release.yml`) for the same reason. CI-only change with no impact on the packaged module, scripts, or release artifact. (#22)
+
 ## [1.3.2] - 2026-07-08
 
 ### Fixed
