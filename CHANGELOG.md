@@ -5,6 +5,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-07-08
+
+### Fixed
+
+- A broken or mis-deployed `secrets.psd1` is no longer swallowed and mistaken for "user absent". Previously any failure while resolving a user against AD — including an **undecodable DPAPI SecureString** (a secret generated on a different machine/account) — was caught by `Get-SPSADUser`, written only to the Event Log, and returned as `$null`, exactly like a genuinely missing user. Downstream that silently produced JSON records with empty `FirstName`/`LastName` for a whole forest and, in `SPSyncUserProfile.ps1`, downgraded every affected real user to `UNKNOWN_USER` (swelling the *Not Added* list), one Event-Log line at a time. `Get-SPSADConnection` and `Get-SPSADUser` now **distinguish a configuration/secret error from a lookup miss**: a build-time misconfiguration (missing `LdapPath`, missing `CredentialKey`, or an undecodable/missing secret) throws a terminating error with the `FullyQualifiedErrorId` `SPSADConfigError`, while a genuine not-found still returns `$null`. (#18)
+- `SPSyncUserProfile.ps1` now **pre-flights** the AD configuration once per credential-mode forest referenced by the input JSON, before the user loop, and stops immediately with `Exit 1` and an actionable message when a forest's secret cannot be decoded on this server — instead of silently skipping thousands of users as `UNKNOWN_USER`. (#18)
+- `SPSyncUserInfoList.ps1` (parallel resolution) now **fails the run loudly** when a forest cannot be resolved because of a configuration/secret error, naming the affected forest(s), rather than shipping a JSON with an empty-name forest. (#18)
+
+### Added
+
+- `AuthenticationType` (optional, per domain) in `ad-domains.psd1` — maps to `System.DirectoryServices.AuthenticationTypes` and is passed as the LDAP bind type, so a non-Active-Directory directory can be expressed entirely from configuration: `'None'` for a plain simple bind, `'SecureSocketsLayer'` for LDAPS on port 636, etc. It defaults to `'Secure'` (integrated Kerberos/NTLM), unchanged for existing AD forests, and when set on a `Default`-mode domain it is now honoured (previously it was only applied to `Credential`-mode domains). The value is parsed case-insensitively and may combine flags (e.g. `'SecureSocketsLayer, ServerBind'`); an unknown value now fails the run with the list of valid names (a terminating `SPSADConfigError`) instead of silently falling back to `$null`. (#20)
+- `Get-SPSADConnectionError` (public) — validates the AD configuration/secret for the forests referenced by a set of logins (a fast, query-free pre-flight that decodes each forest's secret without issuing an LDAP search) and returns the forests that fail. Backs the new `SPSyncUserProfile.ps1` pre-flight. (#18)
+
+### Changed
+
+- A **connectivity** error (an LDAP server that is *not operational* or returns a *referral* — e.g. an external directory reachable from an application farm but not from the UPA master) is deliberately kept **non-fatal**: the affected login is logged and left unresolved so the rest of the run continues, and `Test-SPSUserSyncReadiness.ps1` flags the forest. Only deterministic, fixable configuration/secret errors abort the run. (#18)
+- Documentation: the *Failed to decode SecureString* troubleshooting entry now covers the new fail-fast behaviour, a new entry covers the *server is not operational* / *referral returned* LDAP connectivity errors, and `ad-domains.example.psd1` documents `AuthenticationType` with a non-AD directory example. (#18, #20)
+
 ## [1.3.1] - 2026-07-08
 
 ### Fixed

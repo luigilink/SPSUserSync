@@ -175,8 +175,8 @@ Run `Test-SPSUserSyncReadiness.ps1` **on each server** (application farms **and*
 ### LDAP bind fails: "The server is not operational" or "A referral was returned"
 
 ```
-[FAIL]  Domain 'rga' LDAP bind - Exception calling "FindOne" ...: "The server is not operational."
-[FAIL]  Domain 'contoso' LDAP bind - Exception calling "FindOne" ...: "A referral was returned from the server."
+[FAIL]  Domain 'partners' LDAP bind - Exception calling "FindOne" ...: "The server is not operational."
+[FAIL]  Domain 'fabrikam' LDAP bind - Exception calling "FindOne" ...: "A referral was returned from the server."
 ```
 
 These are **connectivity** problems (the secret, if any, decoded fine — the directory itself could not be queried), most common with an external or specially-configured forest:

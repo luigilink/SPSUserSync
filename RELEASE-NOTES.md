@@ -1,46 +1,67 @@
 # SPSUserSync - Release Notes
 
-## [1.3.1] - 2026-07-08
+## [1.3.2] - 2026-07-08
 
-This is a hardening release for `SPSyncUserInfoList.ps1`. It does not change the
-generated JSON for a correctly-permissioned account, but it makes a **wrong
-service account** (or a missing Shell Admin) fail loudly and early instead of
-silently. It follows a field case where the script was launched with an
-under-privileged account and produced no output and no visible error at all.
+This is a hardening release that makes a broken or mis-deployed `secrets.psd1`
+**fail fast and loud** instead of silently degrading the result. It follows a
+field case where a `secrets.psd1` that could not be decoded on the User Profile
+master server (DPAPI SecureStrings are bound to the machine and account that
+created them) caused thousands of real users to be skipped as `UNKNOWN_USER`,
+with the only trace being one Event-Log line per user.
+
+There is no behaviour change for a correctly-deployed farm; the generated JSON
+and the profile updates are unchanged.
 
 ### Fixed
 
-- **No more silent ACCESS_DENIED runs** (#16). `Get-SPSite -Limit All` no longer
-  uses `-ErrorAction SilentlyContinue`. When the running account cannot enumerate
-  the farm site collections, the `ACCESS_DENIED` (`E_ACCESSDENIED 0x80070005`) is
-  now surfaced to the **console/transcript** as well as the Windows Event Log,
-  with an actionable message pointing at the Shell Admin / correct service
-  account. Previously the error reached only the Event Log, so the operator saw an
-  almost-empty screen while the script kept running and then emitted two confusing
-  secondary errors on a JSON file that was never written.
-- **No more overwriting/copying an empty snapshot** (#16). When zero users are
-  collected — almost always a rights problem rather than a genuinely empty farm —
-  the previous good `SPSyncUserInfoListUserList.json` is left untouched, an
-  explicit error is raised, and the HTML report and the remote copy are **skipped**
-  (the script exits `1`) instead of pushing empty or stale data to the User
-  Profile farm.
+- **AD configuration/secret errors are no longer mistaken for "user absent"**
+  (#18). `Get-SPSADConnection` and `Get-SPSADUser` now distinguish a build-time
+  misconfiguration (missing `LdapPath`, missing `CredentialKey`, or an
+  undecodable/missing secret) — which throws a terminating `SPSADConfigError` —
+  from a genuine lookup miss, which still returns `$null`. Previously every
+  failure, including an undecodable DPAPI secret, was logged only to the Event
+  Log and returned as `$null`, so a broken forest silently produced empty-name
+  records and, on the profile side, `UNKNOWN_USER` downgrades.
+- **`SPSyncUserProfile.ps1` pre-flights the AD configuration** (#18) once per
+  credential-mode forest present in the input JSON, before the user loop, and
+  stops with `Exit 1` and an actionable message when a forest's secret cannot be
+  decoded on this server — instead of silently skipping every affected user.
+- **`SPSyncUserInfoList.ps1` fails the run loudly** (#18) when a forest cannot be
+  resolved because of a configuration/secret error, naming the affected
+  forest(s), rather than writing a JSON with a whole forest blanked out.
 
 ### Added
 
-- **Readiness site-collection enumeration check** (#16). `Test-SPSUserSyncReadiness.ps1`
-  now walks `Get-SPSite -Limit All` and **FAILs** on `ACCESS_DENIED`, pointing at
-  the Shell Admin / service account prerequisite. This is the exact permission
-  `SPSyncUserInfoList.ps1` depends on, and it plugs the gap left by the previous
-  `Get-SPFarm`-only check (which only proves config-database access, while the
-  real run reads every content database). Run the readiness check as the service
-  account before enabling the scheduled task to catch a wrong account up front.
-- **Regression tests** (#16) for `Get-SPSUniqueUsers`: healthy farm writes the JSON
-  and reports success; zero users writes no JSON and raises an Error event;
-  `ACCESS_DENIED` surfaces an actionable Error and writes no JSON.
+- **`AuthenticationType` per domain in `ad-domains.psd1`** (#20) — maps to
+  `System.DirectoryServices.AuthenticationTypes` and is passed as the LDAP bind
+  type, so a non-Active-Directory directory can be configured entirely from the
+  file: `'None'` for a plain simple bind, `'SecureSocketsLayer'` for LDAPS on
+  port 636, and so on. It defaults to `'Secure'` (integrated Kerberos/NTLM),
+  unchanged for existing AD forests, and is now honoured on `Default`-mode
+  domains too (previously only `Credential`-mode). The value is case-insensitive
+  and may combine flags (e.g. `'SecureSocketsLayer, ServerBind'`); an unknown
+  value fails the run with the list of valid names instead of silently falling
+  back. `ad-domains.example.psd1` gains a documented non-AD directory example.
+- `Get-SPSADConnectionError` (#18) — a fast, query-free pre-flight that decodes
+  each referenced forest's secret (without issuing an LDAP search) and returns
+  the forests that fail. It backs the new `SPSyncUserProfile.ps1` pre-flight and
+  is reusable in your own checks.
+
+### Changed
+
+- **Connectivity errors stay non-fatal** (#18). An LDAP server that is *not
+  operational* or returns a *referral* (for example an external directory
+  reachable from an application farm but not from the UPA master) is deliberately
+  not treated as a configuration error: the affected login is logged and left
+  unresolved so the rest of the run continues, and `Test-SPSUserSyncReadiness.ps1`
+  flags the forest so you can fix the LDAP path/routing. Only deterministic,
+  fixable configuration/secret errors abort the run.
 
 ### Upgrade notes
 
-Drop-in replacement for 1.3.0 — no configuration change required. If you rely on a
-scheduled task, make sure the account it runs under is a **Shell Admin** on every
-content database (`Add-SPShellAdmin`); with 1.3.1 a wrong account now fails the run
-explicitly (exit code `1`) instead of silently producing nothing.
+Drop-in replacement for 1.3.1 — no configuration change required. Before enabling
+the scheduled tasks, run `Test-SPSUserSyncReadiness.ps1` **on each server**
+(application farms and the UPA master), signed in as the service account, to
+confirm every forest's secret decodes and binds. With 1.3.2 a forest whose secret
+cannot be decoded now stops the run explicitly (exit code `1`) instead of silently
+producing empty profiles.
