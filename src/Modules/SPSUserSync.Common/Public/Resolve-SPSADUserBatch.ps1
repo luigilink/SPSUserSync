@@ -58,7 +58,7 @@
         .OUTPUTS
         System.Collections.Generic.List[System.Management.Automation.PSObject]
         One object per input login: UserLogin, DisplayName, FirstName, LastName,
-        Email, Country, Location, Resolved, Error.
+        Email, Country, Location, Resolved, Enabled, AccountStatus, Error.
 
         .EXAMPLE
         $resolved = Resolve-SPSADUserBatch -UserLogin $uniqueLogins
@@ -117,16 +117,18 @@
             }
             catch {
                 [PSCustomObject]@{
-                    UserLogin   = $UserLogin
-                    DisplayName = $null
-                    FirstName   = $null
-                    LastName    = $null
-                    Email       = $null
-                    Country     = $null
-                    Location    = $null
-                    Resolved    = $false
-                    Error       = $_.Exception.Message
-                    ConfigError = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
+                    UserLogin     = $UserLogin
+                    DisplayName   = $null
+                    FirstName     = $null
+                    LastName      = $null
+                    Email         = $null
+                    Country       = $null
+                    Location      = $null
+                    Resolved      = $false
+                    Enabled       = $false
+                    AccountStatus = 'NotFound'
+                    Error         = $_.Exception.Message
+                    ConfigError   = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
                 }
             }
         }
@@ -170,16 +172,18 @@
             }
             catch {
                 $results.Add([PSCustomObject]@{
-                        UserLogin   = $job.Login
-                        DisplayName = $null
-                        FirstName   = $null
-                        LastName    = $null
-                        Email       = $null
-                        Country     = $null
-                        Location    = $null
-                        Resolved    = $false
-                        Error       = $_.Exception.Message
-                        ConfigError = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
+                        UserLogin     = $job.Login
+                        DisplayName   = $null
+                        FirstName     = $null
+                        LastName      = $null
+                        Email         = $null
+                        Country       = $null
+                        Location      = $null
+                        Resolved      = $false
+                        Enabled       = $false
+                        AccountStatus = 'NotFound'
+                        Error         = $_.Exception.Message
+                        ConfigError   = ($_.FullyQualifiedErrorId -like 'SPSADConfigError*')
                     })
             }
             finally {

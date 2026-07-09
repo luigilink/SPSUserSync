@@ -217,14 +217,39 @@ The JSON snapshot is an array of records, one per unique `SPUser`:
         "LastName": "DOE",
         "Email": "john.doe@contoso.com",
         "Location": "PARIS",
-        "Country": "FR"
+        "Country": "FR",
+        "AccountStatus": "Active"
     }
 ]
 ```
+
+`AccountStatus` **(1.3.3+)** is derived from the AD `userAccountControl` attribute and
+is one of `Active`, `Disabled` (the account exists but is disabled — e.g. a departed
+employee kept for permission history) or `NotFound` (the account no longer resolves in
+AD). It is additive: older consumers ignore it. It works for every directory because it
+reads only the universal `userAccountControl` bit, with no dependency on how a customer
+disables or deletes leavers.
 
 Convert back to PowerShell objects with:
 
 ```powershell
 $users = Get-Content -Path '.\SPSyncUserInfoListUserList.json' -Raw -Encoding UTF8 | ConvertFrom-Json
 $users | Where-Object Country -eq 'FR' | Measure-Object
+$users | Where-Object AccountStatus -eq 'Disabled' | Measure-Object   # departed-but-retained accounts
 ```
+
+## The Not-Added report (SPSyncUserProfile)
+
+`SPSyncUserProfile.ps1` writes the users it did **not** provision to
+`SPSyncUserNotAddedInUSPList<timestamp>.json`. **(1.3.3+)** each entry carries a
+`NotAddedReason` and the run prints a per-reason breakdown, so an *expected* miss is
+easy to tell apart from an *actionable* one:
+
+| `NotAddedReason` | Meaning | Action |
+|---|---|---|
+| `AD_NOT_FOUND` | The account no longer resolves in AD (`AccountStatus` `NotFound`): a deleted/departed user, **or** a login whose domain is not declared in `ad-domains.psd1` and fell back to `Default`. | Expected for genuine leavers. If a whole forest is affected, declare it in `ad-domains.psd1` (see *Domain '...' not found*). |
+| `MISSING_ATTRIBUTES` | The account resolved but `FirstName`, `LastName` or `Email` is empty in the snapshot. | Populate the missing AD attributes, or exclude the login if it is a service/system account. |
+| `DISABLED` | The account has all attributes but is **disabled** in AD, and `SkipDisabledUsers = $true`. | Expected when you keep departed employees as disabled accounts. Set `SkipDisabledUsers = $false` to provision them anyway. |
+
+`SkipDisabledUsers` acts on the `AccountStatus` produced by `SPSyncUserInfoList` 1.3.3+,
+so **regenerate the JSON snapshot after upgrading** for the flag to take effect.

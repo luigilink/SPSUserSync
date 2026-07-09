@@ -61,6 +61,7 @@ class SPSiteUser {
     [System.String]$Email
     [System.String]$Location
     [System.String]$Country
+    [System.String]$AccountStatus
 }
 
 class SPSDeletedUser {
@@ -300,6 +301,8 @@ Exception: $_
         # Phase 3: build one JSON record per unique user (no SharePoint calls).
         # DisplayName falls back to the SharePoint display name, and the SharePoint
         # email wins over the AD mail, exactly as the sequential version did.
+        # AccountStatus (Active / Disabled / NotFound) is carried straight from the
+        # AD resolution so SPSyncUserProfile.ps1 can act on it downstream.
         foreach ($snapshot in $uniqueUsers.Values) {
             $resolved = $resolvedByLogin[$snapshot.UserLogin]
 
@@ -316,13 +319,14 @@ Exception: $_
             }
 
             [void]$tbSPSiteUsers.Add([SPSiteUser]@{
-                    UserLogin   = $snapshot.UserLogin
-                    DisplayName = $recordDisplayName
-                    FirstName   = $resolved.FirstName
-                    LastName    = $resolved.LastName
-                    Email       = $recordEmail
-                    Location    = $resolved.Location
-                    Country     = $resolved.Country
+                    UserLogin     = $snapshot.UserLogin
+                    DisplayName   = $recordDisplayName
+                    FirstName     = $resolved.FirstName
+                    LastName      = $resolved.LastName
+                    Email         = $recordEmail
+                    Location      = $resolved.Location
+                    Country       = $resolved.Country
+                    AccountStatus = $resolved.AccountStatus
                 })
         }
 

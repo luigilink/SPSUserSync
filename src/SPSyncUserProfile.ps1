@@ -14,7 +14,11 @@
     - When the profile does not exist, the script creates it provided the
       account can still be resolved in Active Directory (via Test-SPSADUser).
     - Users missing FirstName, LastName or Email in the input JSON are
-      written to a separate JSON for follow-up.
+      written to a separate JSON for follow-up, each tagged with a
+      NotAddedReason (AD_NOT_FOUND, MISSING_ATTRIBUTES or DISABLED).
+    - When SkipDisabledUsers is enabled in sync-settings.psd1, accounts flagged
+      Disabled in the snapshot (AD userAccountControl) are reported as Not Added
+      instead of being provisioned, so departed-but-retained accounts are skipped.
 
     Before processing, the script pre-flights the Active Directory configuration
     once per forest present in the input: if a forest's secrets.psd1 entry cannot
@@ -229,6 +233,83 @@ Exception: $_
     Write-Output "Manage $UserLogin in User Profile Service App - Ended at $(Get-Date)"
     Write-Output '--------------------------------------------------------------'
 }
+
+function Split-SPSProfileUser {
+    <#
+        .SYNOPSIS
+        Partitions the input users into the profiles to provision and the ones to
+        leave out, tagging every excluded user with a NotAddedReason.
+
+        .DESCRIPTION
+        A user is eligible for a User Profile only when it has the required
+        attributes (FirstName, LastName and Email) AND is not being deliberately
+        skipped for being disabled in Active Directory.
+
+        Excluded users are annotated with a NotAddedReason so the operator can tell
+        an expected miss from an actionable one:
+        - 'AD_NOT_FOUND'      : the account no longer resolves in AD (deleted /
+                                departed, or a forest not declared in ad-domains.psd1)
+                                - it has no attributes AND AccountStatus 'NotFound'.
+        - 'MISSING_ATTRIBUTES': resolved but FirstName, LastName or Email is empty.
+        - 'DISABLED'          : has all attributes but the AD account is disabled and
+                                SkipDisabledUsers is on.
+
+        The disabled gate relies only on the universal AccountStatus tag written by
+        SPSyncUserInfoList.ps1 (from userAccountControl), so it behaves identically
+        for every customer. Snapshots produced before 1.3.3 carry no AccountStatus,
+        so no user is skipped as disabled until a fresh snapshot is generated.
+
+        .PARAMETER User
+        The users loaded from the input JSON.
+
+        .PARAMETER SkipDisabledUsers
+        When $true, users whose AccountStatus is 'Disabled' are excluded from
+        provisioning. Default $false preserves the pre-1.3.3 behaviour.
+
+        .OUTPUTS
+        A hashtable with two ArrayLists: Eligible and NotAdded.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Collections.Hashtable])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $User,
+
+        [Parameter()]
+        [System.Boolean]
+        $SkipDisabledUsers = $false
+    )
+
+    $eligible = New-Object System.Collections.ArrayList
+    $notAdded = New-Object System.Collections.ArrayList
+
+    foreach ($u in $User) {
+        $missingAttributes = [string]::IsNullOrEmpty($u.FirstName) -or
+            [string]::IsNullOrEmpty($u.LastName) -or
+            [string]::IsNullOrEmpty($u.Email)
+        $isDisabled = ($u.AccountStatus -eq 'Disabled')
+
+        if (-not $missingAttributes -and -not ($SkipDisabledUsers -and $isDisabled)) {
+            [void]$eligible.Add($u)
+            continue
+        }
+
+        if ($missingAttributes) {
+            $reason = if ($u.AccountStatus -eq 'NotFound') { 'AD_NOT_FOUND' } else { 'MISSING_ATTRIBUTES' }
+        }
+        else {
+            # Reached only via the SkipDisabledUsers gate (attributes are present).
+            $reason = 'DISABLED'
+        }
+
+        [void]$notAdded.Add(($u | Add-Member -NotePropertyName 'NotAddedReason' -NotePropertyValue $reason -PassThru -Force))
+    }
+
+    return @{ Eligible = $eligible; NotAdded = $notAdded }
+}
 #endregion
 
 #region Main
@@ -318,9 +399,18 @@ if ($null -eq $getMysiteHost) {
     Throw $catchMessage
 }
 
-# Filter users with prerequisites
-$usersWithPrerequisites    = $psoSPSiteUsers | Where-Object -FilterScript { -not ([string]::IsNullOrEmpty($_.FirstName) -or [string]::IsNullOrEmpty($_.LastName) -or [string]::IsNullOrEmpty($_.Email)) }
-$usersWithoutPrerequisites = $psoSPSiteUsers | Where-Object -FilterScript { [string]::IsNullOrEmpty($_.FirstName) -or [string]::IsNullOrEmpty($_.LastName) -or [string]::IsNullOrEmpty($_.Email) }
+# Filter users with prerequisites. AD-disabled accounts are optionally excluded
+# (opt-in SkipDisabledUsers, default $false = pre-1.3.3 behaviour), so a departed
+# employee whose account is disabled-but-retained does not get a profile. The gate
+# reads only the universal AccountStatus tag from the input JSON, so it works for
+# every customer regardless of their leaver process.
+$skipDisabled = if ($null -ne $settings.SkipDisabledUsers) { [System.Boolean]$settings.SkipDisabledUsers } else { $false }
+if ($skipDisabled) {
+    Write-Output 'SkipDisabledUsers is enabled: AD-disabled accounts will be reported as Not Added instead of provisioned.'
+}
+$splitUsers                = Split-SPSProfileUser -User @($psoSPSiteUsers) -SkipDisabledUsers $skipDisabled
+$usersWithPrerequisites    = $splitUsers.Eligible
+$usersWithoutPrerequisites = $splitUsers.NotAdded
 
 # Pre-flight the AD configuration once per forest BEFORE the loop. Profiles are only
 # created for users that still resolve in AD (Test-SPSADUser), so a secrets.psd1 that
@@ -369,7 +459,10 @@ Exception: $_
 }
 
 if ($usersWithoutPrerequisites.Count -ne 0) {
-    Write-Output "$($usersWithoutPrerequisites.Count) users do not meet Prerequisites: First Name, Last Name and Email aren't filled."
+    $missingCount  = @($usersWithoutPrerequisites | Where-Object { $_.NotAddedReason -eq 'MISSING_ATTRIBUTES' }).Count
+    $notFoundCount = @($usersWithoutPrerequisites | Where-Object { $_.NotAddedReason -eq 'AD_NOT_FOUND' }).Count
+    $disabledCount = @($usersWithoutPrerequisites | Where-Object { $_.NotAddedReason -eq 'DISABLED' }).Count
+    Write-Output "$($usersWithoutPrerequisites.Count) user(s) not added to the User Profile Service Application (missing attributes: $missingCount, not found in AD: $notFoundCount, disabled: $disabledCount)."
     $usersWithoutPrerequisites | ConvertTo-Json | Set-Content -Path $pathUserNotAddedInUSPFile -Force -Encoding UTF8
     Write-Output "Saved User Profile Management in file: $pathUserNotAddedInUSPFile"
 }

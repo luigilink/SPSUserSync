@@ -8,9 +8,10 @@
         works offline) summarizing one of the two SPSUserSync datasets:
 
         - ReportType 'UserInfoList' : the snapshot written by SPSyncUserInfoList.ps1
-          (UserLogin / DisplayName / Email / Country ...). The summary shows the total
-          user count, the email coverage, and the top countries and Active Directory
-          domains.
+          (UserLogin / DisplayName / Email / Country / AccountStatus ...). The summary
+          shows the total user count, the email coverage, the unresolved count, the
+          number of accounts disabled in AD, and the top countries and Active
+          Directory domains.
         - ReportType 'UserProfile' : the reconciliation log written by
           SPSyncUserProfile.ps1 (AccountName / Status / WorkEmail / Date). The summary
           breaks the run down by Status (CREATE / UPDATE / INFO / UNKNOWN_USER).
@@ -128,15 +129,22 @@
     if ($ReportType -eq 'UserInfoList') {
         if ([string]::IsNullOrEmpty($Title)) { $Title = 'SPSUserSync - User Information List Report' }
         $columns = @(
-            @{ field = 'UserLogin';   label = 'User Login' }
-            @{ field = 'DisplayName'; label = 'Display Name' }
-            @{ field = 'Email';       label = 'Email' }
-            @{ field = 'Country';     label = 'Country' }
+            @{ field = 'UserLogin';     label = 'User Login' }
+            @{ field = 'DisplayName';   label = 'Display Name' }
+            @{ field = 'Email';         label = 'Email' }
+            @{ field = 'Country';       label = 'Country' }
+            @{ field = 'AccountStatus'; label = 'AD Status' }
         )
 
         $total        = $records.Count
         $withEmail    = @($records | Where-Object { -not [string]::IsNullOrEmpty($_.Email) }).Count
         $withoutEmail = $total - $withEmail
+        # Accounts found in AD but disabled (userAccountControl 0x2), recorded by
+        # SPSyncUserInfoList 1.3.3+. They resolve cleanly (so they are NOT counted as
+        # unresolved) but are the departed-but-retained accounts SkipDisabledUsers
+        # keeps out of the User Profile. A pre-1.3.3 snapshot has no AccountStatus,
+        # so this is simply 0.
+        $disabledCount = @($records | Where-Object { "$($_.AccountStatus)" -eq 'Disabled' }).Count
 
         # Flag users whose identity did not resolve from AD. A record is
         # "unresolved" when it has no display name, or its display name is just
@@ -172,11 +180,16 @@
             (Get-SPSReportCardHtml -Value $withEmail -Label 'With email')
             (Get-SPSReportCardHtml -Value $withoutEmail -Label 'Without email')
             (Get-SPSReportCardHtml -Value $unresolvedCount -Label 'Unresolved' -Tone $(if ($unresolvedCount -gt 0) { 'warn' } else { '' }))
+            (Get-SPSReportCardHtml -Value $disabledCount -Label 'Disabled in AD' -Tone $(if ($disabledCount -gt 0) { 'warn' } else { '' }))
         ) -join ''
 
         if ($unresolvedCount -gt 0) {
             $userWord = if ($unresolvedCount -eq 1) { 'user' } else { 'users' }
             $detailsNote = "<div class=`"note`"><strong>$unresolvedCount unresolved $userWord</strong> highlighted below &mdash; their identity did not resolve from Active Directory (no display name, or the display name is just the login), so they will not sync to the user profile and would be removed if <code>RemoveUnresolvableUsers</code> is enabled.</div>"
+        }
+        if ($disabledCount -gt 0) {
+            $accWord = if ($disabledCount -eq 1) { 'account is' } else { 'accounts are' }
+            $detailsNote += "<div class=`"note`"><strong>$disabledCount disabled AD $accWord</strong> present in this snapshot (see the <em>AD Status</em> column). They resolve normally but are disabled in Active Directory &mdash; typically departed employees kept for permission history. Enable <code>SkipDisabledUsers</code> in <code>sync-settings.psd1</code> to keep them out of the User Profile Service Application.</div>"
         }
 
         $listsHtml = (Get-SPSReportTopListHtml -Title 'Top countries' -Groups $topCountries) +
