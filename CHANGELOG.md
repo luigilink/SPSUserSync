@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - A **connectivity** error (an LDAP server that is *not operational* or returns a *referral* — e.g. an external directory reachable from an application farm but not from the UPA master) is deliberately kept **non-fatal**: the affected login is logged and left unresolved so the rest of the run continues, and `Test-SPSUserSyncReadiness.ps1` flags the forest. Only deterministic, fixable configuration/secret errors abort the run. (#18)
+- CI now also runs the Pester suite under **Windows PowerShell 5.1** (the edition the scripts run under in production), in addition to PowerShell 7. This guards against APIs that exist only on the newer .NET — the `AuthenticationType` parsing uses `[Enum]::Parse` (present since .NET Framework 1.1) rather than the 4-argument `[Enum]::TryParse` overload, which is absent on the .NET Framework that hosts Windows PowerShell 5.1. (#20)
 - Documentation: the *Failed to decode SecureString* troubleshooting entry now covers the new fail-fast behaviour, a new entry covers the *server is not operational* / *referral returned* LDAP connectivity errors, and `ad-domains.example.psd1` documents `AuthenticationType` with a non-AD directory example. (#18, #20)
 
 ## [1.3.1] - 2026-07-08

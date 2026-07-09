@@ -169,7 +169,15 @@ Describe 'Get-SPSADConnection AuthenticationType validation (issue #20)' {
             # point is that a valid type must NOT be flagged as invalid by validation.
             $err = $null
             try { $null = Get-SPSADConnection -DomainName 'ok' -AccountName 'u' } catch { $err = $_ }
-            if ($err) { $err.Exception.Message | Should -Not -Match 'invalid AuthenticationType' }
+            if ($err) {
+                $err.Exception.Message | Should -Not -Match 'invalid AuthenticationType'
+                # Regression guard for Windows PowerShell 5.1 (.NET Framework): the
+                # 4-arg [Enum]::TryParse(Type,string,bool,[ref]) overload does not
+                # exist there. If it were used, this would surface as a
+                # "Cannot find an overload for TryParse" method-resolution error.
+                $err.Exception.Message | Should -Not -Match 'overload'
+                $err.Exception.Message | Should -Not -Match 'TryParse'
+            }
         }
     }
 }

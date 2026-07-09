@@ -94,11 +94,16 @@
     # passed as the 4th DirectoryEntry argument. Default 'Secure' suits AD forests;
     # a non-AD LDAP directory may need 'None' (simple bind) or
     # 'SecureSocketsLayer' (LDAPS on :636). Parse case-insensitively and accept flag
-    # combinations (e.g. 'SecureSocketsLayer, ServerBind'); a typo must fail loudly
-    # instead of silently yielding $null via the static accessor.
+    # combinations (e.g. 'SecureSocketsLayer, ServerBind'); a typo must fail loudly.
+    # NB: use [Enum]::Parse(Type, string, ignoreCase) - the non-generic
+    # [Enum]::TryParse(Type, string, bool, [ref]) overload only exists on .NET Core /
+    # .NET 5+, not on the .NET Framework that hosts Windows PowerShell 5.1.
     $authTypeName = if ($domainEntry.AuthenticationType) { $domainEntry.AuthenticationType } else { 'Secure' }
-    $authType     = [System.DirectoryServices.AuthenticationTypes]::Secure
-    if (-not [System.Enum]::TryParse([System.DirectoryServices.AuthenticationTypes], $authTypeName, $true, [ref]$authType)) {
+    try {
+        $authType = [System.DirectoryServices.AuthenticationTypes][System.Enum]::Parse(
+            [System.DirectoryServices.AuthenticationTypes], $authTypeName, $true)
+    }
+    catch {
         $validNames = ([System.Enum]::GetNames([System.DirectoryServices.AuthenticationTypes])) -join ', '
         throw "Domain '$DomainName' has an invalid AuthenticationType '$authTypeName' in ad-domains.psd1. Valid values (comma-combinable): $validNames."
     }
