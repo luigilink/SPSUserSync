@@ -140,6 +140,9 @@ Environment-specific knobs read by both scripts.
     # Parallel AD resolution (1.3.0+)
     ParallelADResolution     = $false
     MaxParallelADQueries     = 0
+
+    # AD account status handling (1.3.3+)
+    SkipDisabledUsers        = $false
 }
 ```
 
@@ -162,6 +165,7 @@ Environment-specific knobs read by both scripts.
 | `GenerateHtmlReport` | both | **(1.1.0+)** When `$true`, each run also writes a self-contained HTML report under `Logs\`. Defaults to `$true` when absent. |
 | `ParallelADResolution` | `SPSyncUserInfoList` | **(1.3.0+)** When `$true`, the unique user logins are resolved against AD concurrently via a RunspacePool. Worth enabling on large multi-forest farms where the LDAP round-trip dominates; leave `$false` on small farms (the per-runspace module-import overhead is not amortized). The generated JSON is identical either way. Defaults to `$false` when absent. |
 | `MaxParallelADQueries` | `SPSyncUserInfoList` | **(1.3.0+)** Maximum concurrent AD lookups when `ParallelADResolution` is `$true`. `0` (or absent) lets the toolkit pick a value from the CPU count (cap 10 on 8+ logical CPUs). |
+| `SkipDisabledUsers` | `SPSyncUserProfile` | **(1.3.3+)** When `$true`, an account flagged `Disabled` in the snapshot (from the AD `userAccountControl` bit) is **not** given a User Profile — it is written to the Not-Added report with reason `DISABLED`. Use it when departed employees are kept as *disabled* AD accounts (and retained in the SharePoint User Information List for permission history). Defaults to `$false` (a disabled-but-resolvable account still gets a profile), unchanged from 1.3.2. Acts on the `AccountStatus` written by `SPSyncUserInfoList` 1.3.3+, so regenerate the JSON snapshot after upgrading for it to take effect. |
 
 > **Backward compatibility:** the three `1.1.0+` keys are optional. An existing `sync-settings.psd1` created for 1.0.0 keeps working unchanged; the documented defaults apply until you add the keys.
 

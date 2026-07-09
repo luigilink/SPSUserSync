@@ -33,6 +33,40 @@ Describe 'ConvertTo-SPSUserRecord' {
         $r.Error       | Should -BeNullOrEmpty
     }
 
+    It 'treats a resolved user with no userAccountControl as active (backward compatible)' {
+        $ad = New-FakeAdUser -Properties @{ givenname = 'Adam'; sn = 'Becker'; mail = 'a@x'; displayname = 'Adam Becker' }
+        $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\adambecker' -AdUser $ad
+        $r.AccountStatus | Should -Be 'Active'
+        $r.Enabled       | Should -BeTrue
+    }
+
+    It 'marks the account active when userAccountControl has no disable bit (512)' {
+        $ad = New-FakeAdUser -Properties @{ givenname = 'A'; sn = 'B'; mail = 'a@x'; displayname = 'A B'; useraccountcontrol = 512 }
+        $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ab' -AdUser $ad
+        $r.AccountStatus | Should -Be 'Active'
+        $r.Enabled       | Should -BeTrue
+    }
+
+    It 'marks the account disabled when userAccountControl has the ACCOUNTDISABLE bit (514)' {
+        $ad = New-FakeAdUser -Properties @{ givenname = 'A'; sn = 'B'; mail = 'a@x'; displayname = 'A B'; useraccountcontrol = 514 }
+        $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ab' -AdUser $ad
+        $r.AccountStatus | Should -Be 'Disabled'
+        $r.Enabled       | Should -BeFalse
+        $r.Resolved      | Should -BeTrue
+    }
+
+    It 'detects the disable bit when combined with other flags (66050 = 0x10202)' {
+        $ad = New-FakeAdUser -Properties @{ givenname = 'A'; sn = 'B'; mail = 'a@x'; displayname = 'A B'; useraccountcontrol = 66050 }
+        $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ab' -AdUser $ad
+        $r.AccountStatus | Should -Be 'Disabled'
+    }
+
+    It 'parses a string userAccountControl (SearchResult values arrive as strings)' {
+        $ad = New-FakeAdUser -Properties @{ givenname = 'A'; sn = 'B'; mail = 'a@x'; displayname = 'A B'; useraccountcontrol = '514' }
+        $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ab' -AdUser $ad
+        $r.AccountStatus | Should -Be 'Disabled'
+    }
+
     It 'upper-cases country and location' {
         $ad = New-FakeAdUser -Properties @{ givenname = 'A'; sn = 'B'; co = 'fr'; l = 'lyon'; displayname = 'A B' }
         $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ab' -AdUser $ad
@@ -55,11 +89,13 @@ Describe 'ConvertTo-SPSUserRecord' {
 
     It 'returns an unresolved record for a null AD entry' {
         $r = ConvertTo-SPSUserRecord -UserLogin 'ZEBES\ghost' -AdUser $null
-        $r.UserLogin    | Should -Be 'ZEBES\ghost'
-        $r.Resolved     | Should -BeFalse
-        $r.DisplayName  | Should -BeNullOrEmpty
-        $r.FirstName    | Should -BeNullOrEmpty
-        $r.Email        | Should -BeNullOrEmpty
+        $r.UserLogin      | Should -Be 'ZEBES\ghost'
+        $r.Resolved       | Should -BeFalse
+        $r.Enabled        | Should -BeFalse
+        $r.AccountStatus  | Should -Be 'NotFound'
+        $r.DisplayName    | Should -BeNullOrEmpty
+        $r.FirstName      | Should -BeNullOrEmpty
+        $r.Email          | Should -BeNullOrEmpty
     }
 }
 

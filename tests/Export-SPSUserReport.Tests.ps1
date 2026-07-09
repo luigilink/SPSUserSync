@@ -88,6 +88,59 @@ Describe 'Export-SPSUserReport unresolved flagging (UserInfoList)' {
     }
 }
 
+Describe 'Export-SPSUserReport account status (UserInfoList, 1.3.3)' {
+    BeforeAll {
+        $records = @(
+            [pscustomobject]@{ UserLogin = 'i:0#.w|CONTOSO\jdoe'; DisplayName = 'DOE John';    Email = 'john.doe@contoso.com'; Country = 'FR'; AccountStatus = 'Active' }
+            [pscustomobject]@{ UserLogin = 'i:0#.w|CONTOSO\gone'; DisplayName = 'GONE Greg';    Email = 'greg@contoso.com';     Country = 'FR'; AccountStatus = 'NotFound' }
+            [pscustomobject]@{ UserLogin = 'i:0#.w|CONTOSO\dis';  DisplayName = 'DIS Dana';     Email = 'dana@contoso.com';     Country = 'FR'; AccountStatus = 'Disabled' }
+            [pscustomobject]@{ UserLogin = 'i:0#.w|CONTOSO\dis2'; DisplayName = 'DIS Dan';      Email = 'dan@contoso.com';      Country = 'US'; AccountStatus = 'Disabled' }
+        )
+        $output = Join-Path $TestDrive 'status.html'
+        $null = Export-SPSUserReport -InputObject $records -ReportType 'UserInfoList' -OutputFile $output -ClaimPrefix 'i:0#.w|'
+        $html = Get-Content -Path $output -Raw
+    }
+
+    It 'adds a Disabled in AD summary card with the count' {
+        $html | Should -BeLike '*>2</div><div class="card-label">Disabled in AD</div>*'
+    }
+
+    It 'renders the Disabled card with the warn tone when any account is disabled' {
+        $html | Should -BeLike '*class="card warn"*'
+    }
+
+    It 'exposes the AD Status column and the status values in the payload' {
+        $html | Should -BeLike '*AD Status*'
+        $html | Should -BeLike '*"AccountStatus":"Disabled"*'
+        $html | Should -BeLike '*"AccountStatus":"NotFound"*'
+    }
+
+    It 'shows the disabled note referencing SkipDisabledUsers' {
+        $html | Should -BeLike '*SkipDisabledUsers*'
+    }
+}
+
+Describe 'Export-SPSUserReport backward compatibility (UserInfoList without AccountStatus)' {
+    BeforeAll {
+        # A pre-1.3.3 snapshot has no AccountStatus property at all.
+        $records = @(
+            [pscustomobject]@{ UserLogin = 'i:0#.w|CONTOSO\jdoe'; DisplayName = 'DOE John'; Email = 'john.doe@contoso.com'; Country = 'FR' }
+        )
+        $output = Join-Path $TestDrive 'legacy.html'
+        $null = Export-SPSUserReport -InputObject $records -ReportType 'UserInfoList' -OutputFile $output
+        $html = Get-Content -Path $output -Raw
+    }
+
+    It 'still renders and reports zero disabled accounts' {
+        Test-Path $output | Should -BeTrue
+        $html | Should -BeLike '*>0</div><div class="card-label">Disabled in AD</div>*'
+    }
+
+    It 'does not add the disabled note when there are no disabled accounts' {
+        $html | Should -Not -BeLike '*SkipDisabledUsers*'
+    }
+}
+
 Describe 'Export-SPSUserReport (UserProfile)' {
     It 'renders a card per status' {
         $records = @(

@@ -41,6 +41,19 @@
     #   from the farm.
     RemoveUnresolvableUsers = $false
 
+    # SkipDisabledUsers : when $true, SPSyncUserProfile.ps1 does NOT create/update a
+    #   User Profile for an account flagged Disabled in the snapshot (SPSyncUserInfoList
+    #   records this from the AD userAccountControl attribute). Disabled accounts are
+    #   written to the Not-Added report with reason 'DISABLED' instead. Use this when
+    #   departed employees are kept as *disabled* AD accounts (and retained in the
+    #   SharePoint User Information List for permission history) and you do not want
+    #   profiles created for them. When $false (default), behaviour is unchanged: a
+    #   disabled-but-resolvable account still gets a profile. Relies only on the
+    #   universal userAccountControl bit, so it works for any directory. Note: it acts
+    #   on the AccountStatus written by SPSyncUserInfoList 1.3.3+, so regenerate the
+    #   JSON snapshot after upgrading for this flag to take effect.
+    SkipDisabledUsers = $false
+
     MasterVM       = 'YOUR-MASTER-SERVER'
     MySiteUrl      = 'https://mysite.contoso.com'
     RemoteJsonPath = '\\{0}\d$\Tools\SCRIPTS\JOBS\SPSyncUserProfile\SPSyncUserInfoListUserList-{1}.json'
