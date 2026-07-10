@@ -48,6 +48,16 @@ Describe 'Add-SPSUserProfile parameter contract' {
         $hasAllowEmpty = [bool]($p.Attributes | Where-Object { $_ -is [System.Management.Automation.AllowEmptyCollectionAttribute] })
         $hasAllowEmpty | Should -BeTrue
     }
+
+    It 'takes a pre-built UserProfileManager instead of rebuilding it per user (#24)' {
+        # The manager is now built once in Main and passed in; the old per-user
+        # MySiteUrl parameter (which drove the per-user Get-SPServiceContext +
+        # UserProfileManager construction) is gone.
+        $cmd = Get-Command Add-SPSUserProfile
+        $cmd.Parameters.Keys | Should -Contain 'UserProfileManager'
+        $cmd.Parameters['UserProfileManager'].Attributes.Where{ $_ -is [System.Management.Automation.ParameterAttribute] }[0].Mandatory | Should -BeTrue
+        $cmd.Parameters.Keys | Should -Not -Contain 'MySiteUrl'
+    }
 }
 
 Describe 'Split-SPSProfileUser' {

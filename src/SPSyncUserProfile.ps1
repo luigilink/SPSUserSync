@@ -31,6 +31,12 @@
     every forest because the AD lookup has already been performed on the
     application farms.
 
+    For performance, the User Profile service context and UserProfileManager are
+    created once and reused for every user (rather than rebuilt per user), and the
+    per-user transcript output is condensed to a single status line; the run ends
+    with a timing summary (users, wall time, average ms/user, and the
+    CREATE/UPDATE/INFO/UNKNOWN_USER breakdown).
+
     .PARAMETER InputFile
     Absolute path of the JSON file produced by SPSyncUserInfoList.ps1.
 
@@ -110,8 +116,7 @@ function Add-SPSUserProfile {
         $Country,
 
         [Parameter(Mandatory = $true)]
-        [System.String]
-        $MySiteUrl,
+        $UserProfileManager,
 
         [Parameter(Mandatory = $true)]
         [System.String]
@@ -126,51 +131,40 @@ function Add-SPSUserProfile {
     $UserLogin           = $UserLogin.Replace($ClaimPrefix, '')
     $userProfileUpdated  = $false
     $spUserProfileStatus = 'INFO'
-    $funcStarted         = Get-Date
-
-    Write-Output '--------------------------------------------------------------'
-    Write-Output "Manage $UserLogin in User Profile Service App - Started at $funcStarted"
+    $changedFields       = New-Object System.Collections.Generic.List[System.String]
 
     try {
-        $spServiceContext     = Get-SPServiceContext -Site $MySiteUrl
-        $spUserProfileManager = New-Object -TypeName Microsoft.Office.Server.UserProfiles.UserProfileManager($spServiceContext)
-
-        if ($spUserProfileManager.UserExists($UserLogin)) {
-            $getUserProfile = $spUserProfileManager.GetUserProfile($UserLogin)
-            Write-Output '[SPUserProfiles.UserProfileManager.GetUserProfile] Current Values:'
-            Write-Output "AccountName: $UserLogin"
-            Write-Output "PreferredName: $($getUserProfile['PreferredName'].Value)"
-            Write-Output "FirstName: $($getUserProfile['FirstName'].Value)"
-            Write-Output "LastName: $($getUserProfile['LastName'].Value)"
-            Write-Output "WorkEmail: $($getUserProfile['WorkEmail'].Value)"
-            Write-Output "Country: $($getUserProfile['Country'].Value)"
-            Write-Output '[SPUserProfiles.UserProfileManager.GetUserProfile] Target Values:'
-            Write-Output "AccountName: $UserLogin"
-            Write-Output "PreferredName: $PreferredName"
-            Write-Output "FirstName: $FirstName"
-            Write-Output "LastName: $LastName"
-            Write-Output "WorkEmail: $WorkEmail"
-            Write-Output "Country: $Country"
+        # The UserProfileManager is built once by the caller and passed in, rather
+        # than rebuilt per user. Rebuilding Get-SPServiceContext + UserProfileManager
+        # on every user was the dominant cost of the run on a large farm and drove a
+        # steady throughput decay (object churn / GC pressure). (#24)
+        if ($UserProfileManager.UserExists($UserLogin)) {
+            $getUserProfile = $UserProfileManager.GetUserProfile($UserLogin)
 
             if ($getUserProfile['WorkEmail'].Value -ne $WorkEmail) {
                 $getUserProfile['WorkEmail'].Value = $WorkEmail
                 $userProfileUpdated = $true
+                [void]$changedFields.Add('WorkEmail')
             }
             if ($getUserProfile['PreferredName'].Value -ne $PreferredName) {
                 $getUserProfile['PreferredName'].Value = $PreferredName
                 $userProfileUpdated = $true
+                [void]$changedFields.Add('PreferredName')
             }
             if ($getUserProfile['FirstName'].Value -ne $FirstName) {
                 $getUserProfile['FirstName'].Value = $FirstName
                 $userProfileUpdated = $true
+                [void]$changedFields.Add('FirstName')
             }
             if ($getUserProfile['LastName'].Value -ne $LastName) {
                 $getUserProfile['LastName'].Value = $LastName
                 $userProfileUpdated = $true
+                [void]$changedFields.Add('LastName')
             }
             if ($getUserProfile['Country'].Value -ne $Country -and -not [string]::IsNullOrEmpty($Country)) {
                 $getUserProfile['Country'].Value = $Country
                 $userProfileUpdated = $true
+                [void]$changedFields.Add('Country')
             }
             if ($userProfileUpdated) {
                 $getUserProfile.Commit()
@@ -178,25 +172,11 @@ function Add-SPSUserProfile {
             }
         }
         else {
-            Write-Output '[SPUserProfiles.UserProfileManager.GetUserProfile] Current Values:'
-            Write-Output "AccountName: $UserLogin"
-            Write-Output 'PreferredName: NULL'
-            Write-Output 'FirstName: NULL'
-            Write-Output 'LastName: NULL'
-            Write-Output 'WorkEmail: NULL'
-            Write-Output 'Country: NULL'
-            Write-Output '[SPUserProfiles.UserProfileManager.GetUserProfile] Target Values:'
-            Write-Output "AccountName: $UserLogin"
-            Write-Output "PreferredName: $PreferredName"
-            Write-Output "FirstName: $FirstName"
-            Write-Output "LastName: $LastName"
-            Write-Output "WorkEmail: $WorkEmail"
-            Write-Output "Country: $Country"
             $spUserProfileStatus = 'CREATE'
             if (Test-SPSADUser -UserLogin $UserLogin) {
-                $spUserProfileManager.CreateUserProfile($UserLogin, $PreferredName)
+                $UserProfileManager.CreateUserProfile($UserLogin, $PreferredName)
                 if (-not [string]::IsNullOrEmpty($WorkEmail)) {
-                    $getUserProfile = $spUserProfileManager.GetUserProfile($UserLogin)
+                    $getUserProfile = $UserProfileManager.GetUserProfile($UserLogin)
                     $getUserProfile['WorkEmail'].Value = $WorkEmail
                     if (-not [string]::IsNullOrEmpty($Country)) { $getUserProfile['Country'].Value = $Country }
                     $getUserProfile['FirstName'].Value = $FirstName
@@ -207,6 +187,17 @@ function Add-SPSUserProfile {
             else {
                 $spUserProfileStatus = 'UNKNOWN_USER'
             }
+        }
+
+        # One concise line per user instead of the previous ~14-line before/after
+        # dump (~14 lines x ~100k users produced a multi-million-line, tens-of-MB
+        # transcript). On an UPDATE the changed fields are listed - the only
+        # actionable detail; CREATE / UNKNOWN_USER are self-explanatory. (#24)
+        if ($spUserProfileStatus -eq 'UPDATE') {
+            Write-Output "[$spUserProfileStatus] $UserLogin (changed: $($changedFields -join ', '))"
+        }
+        else {
+            Write-Output "[$spUserProfileStatus] $UserLogin"
         }
 
         [void]$ResultCollection.Add([SPSUserProfileMgmt]@{
@@ -224,7 +215,6 @@ function Add-SPSUserProfile {
     catch {
         $catchMessage = @"
 An error occurred while managing user '$UserLogin' in User Profile Service App
-MySiteUrl: $MySiteUrl
 Exception: $_
 "@
         Add-SPSUserSyncEvent -Message $catchMessage -Source 'Add-SPSUserProfile' -EntryType 'Error'
@@ -432,8 +422,26 @@ secrets.psd1 must be regenerated on THIS server, as the service account that run
     Exit 1
 }
 
+# Build the User Profile service context and manager ONCE, before the loop. Rebuilding
+# them inside Add-SPSUserProfile for every user was the dominant cost of the run on a
+# large farm (and the source of a steady throughput decay through object churn). (#24)
+try {
+    $spServiceContext     = Get-SPServiceContext -Site $spMySiteHostUrl
+    $spUserProfileManager = New-Object -TypeName Microsoft.Office.Server.UserProfiles.UserProfileManager($spServiceContext)
+}
+catch {
+    $catchMessage = @"
+An error occurred while creating the UserProfileManager for MySite: $spMySiteHostUrl
+Exception: $_
+"@
+    Add-SPSUserSyncEvent -Message $catchMessage -Source 'UserProfileManager' -EntryType 'Error'
+    Stop-Transcript | Out-Null
+    Exit 1
+}
+
 # Process eligible users
 $tbSPSUserProfileMgmt = New-Object -TypeName System.Collections.ArrayList
+$profileLoopStarted = Get-Date
 foreach ($psoSPSiteUser in $usersWithPrerequisites) {
     try {
         Add-SPSUserProfile `
@@ -443,7 +451,7 @@ foreach ($psoSPSiteUser in $usersWithPrerequisites) {
             -LastName $psoSPSiteUser.LastName `
             -WorkEmail $psoSPSiteUser.Email `
             -Country $psoSPSiteUser.Country `
-            -MySiteUrl $spMySiteHostUrl `
+            -UserProfileManager $spUserProfileManager `
             -ClaimPrefix $settings.ClaimPrefix `
             -ResultCollection $tbSPSUserProfileMgmt
     }
@@ -457,6 +465,23 @@ Exception: $_
         Add-SPSUserSyncEvent -Message $catchMessage -Source 'Add-SPSUserProfile' -EntryType 'Error'
     }
 }
+$profileLoopEnded = Get-Date
+
+# Timing summary (#24): each run reports its own throughput and the
+# CREATE / UPDATE / INFO / UNKNOWN_USER split, so future performance work is
+# driven by fresh numbers rather than guesswork.
+$profileElapsed = $profileLoopEnded - $profileLoopStarted
+Write-Output '-----------------------------------------------'
+Write-Output "Profile loop: $($tbSPSUserProfileMgmt.Count) user(s) in $([System.Math]::Round($profileElapsed.TotalMinutes, 1)) min ($([System.Math]::Round($profileElapsed.TotalSeconds, 1)) s)"
+if ($tbSPSUserProfileMgmt.Count -gt 0) {
+    $msPerUser = [System.Math]::Round($profileElapsed.TotalMilliseconds / $tbSPSUserProfileMgmt.Count, 1)
+    Write-Output "Average: $msPerUser ms/user"
+    foreach ($statusGroup in ($tbSPSUserProfileMgmt | Group-Object -Property Status | Sort-Object Count -Descending)) {
+        $statusLabel = if ([string]::IsNullOrEmpty($statusGroup.Name)) { '(none)' } else { $statusGroup.Name }
+        Write-Output "  $statusLabel : $($statusGroup.Count)"
+    }
+}
+Write-Output '-----------------------------------------------'
 
 if ($usersWithoutPrerequisites.Count -ne 0) {
     $missingCount  = @($usersWithoutPrerequisites | Where-Object { $_.NotAddedReason -eq 'MISSING_ATTRIBUTES' }).Count
