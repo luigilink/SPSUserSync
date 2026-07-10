@@ -1,48 +1,37 @@
 # SPSUserSync - Release Notes
 
-## [1.3.3] - 2026-07-09
+## [1.3.4] - 2026-07-10
 
-This release adds **AD account status detection** so departed employees are handled
-correctly, and it works for **every customer** because it relies only on universal
-Active Directory signals — never on a customer-specific leaver process.
+This is a **performance** release for `SPSyncUserProfile.ps1`, with no change in
+behaviour: the same profiles are created and updated, and the same JSON files and
+HTML report are produced.
 
-Two kinds of departed accounts are now distinguished and handled:
-
-- **Disabled** accounts (kept in AD, `userAccountControl` bit `0x2`): detected and,
-  with the new opt-in `SkipDisabledUsers`, reported instead of being given a profile.
-- **Deleted** accounts (no longer in AD): already not provisioned, now explicitly
-  tagged so they can be told apart from an actionable configuration gap.
-
-### Added
-
-- **Account status on every record** — `ConvertTo-SPSUserRecord` reads
-  `userAccountControl` and exposes `AccountStatus` (`Active` / `Disabled` /
-  `NotFound`) and `Enabled`; `SPSyncUserInfoList.ps1` writes `AccountStatus` into the
-  JSON snapshot. Universal by design: no dedicated OU, naming convention, HR feed or
-  retention assumption. A resolved account with no `userAccountControl` (some non-AD
-  LDAP directories) stays `Active`, exactly as before. (#21)
-- **`SkipDisabledUsers`** (`sync-settings.psd1`, default `$false`) — when `$true`,
-  `SPSyncUserProfile.ps1` reports `Disabled` accounts as Not Added instead of creating
-  or updating their profile. Default preserves the previous behaviour. (#21)
-- **`NotAddedReason`** on each Not-Added entry — `AD_NOT_FOUND`, `MISSING_ATTRIBUTES`
-  or `DISABLED` — with a per-reason breakdown in the run summary, so an expected miss
-  (a departed account) is easy to tell apart from an actionable one (e.g. a forest
-  missing from `ad-domains.psd1`). (#21)
-- The **`SPSyncUserInfoList` HTML report** gains an *AD Status* column and a
-  *Disabled in AD* card (with a note pointing at `SkipDisabledUsers`), so disabled —
-  departed-but-retained — accounts are visible before the profile sync runs. (#21)
+On a large (~100k-user) farm, a full profile reconciliation took over an hour. A
+transcript analysis showed the time was spent almost entirely in the per-user loop,
+and that the loop rebuilt the User Profile service context and `UserProfileManager`
+**on every single user** — the dominant cost, and the cause of a steady throughput
+decay over the run (object churn / GC pressure).
 
 ### Changed
 
-- CI: bump the GitHub Actions that ran on the deprecated Node.js 20 runtime —
-  `actions/checkout` `v4`→`v7`, `actions/upload-artifact` `v4`→`v7`,
-  `softprops/action-gh-release` `v2`→`v3`. CI-only; the packaged module and scripts
-  are unchanged. (#22)
+- **The `UserProfileManager` is now built once and reused for the whole run**
+  (#24), instead of being reconstructed for every user inside `Add-SPSUserProfile`.
+  This removes the dominant per-user cost and the associated memory churn.
+- **The per-user transcript output is condensed to a single status line** —
+  `[UPDATE] DOMAIN\user (changed: WorkEmail, Country)`, `[CREATE]`, `[INFO]` or
+  `[UNKNOWN_USER]` — replacing the previous ~14-line before/after dump. On a
+  ~100k-user run this cuts a multi-million-line, tens-of-MB transcript down to one
+  line per user and removes the corresponding synchronous I/O. (#24)
+
+### Added
+
+- **End-of-run timing summary** in `SPSyncUserProfile.ps1`: users processed, wall
+  time, average milliseconds per user, and the CREATE / UPDATE / INFO /
+  UNKNOWN_USER breakdown — so each run's performance is visible directly in the
+  log. (#24)
 
 ### Upgrade note
 
-`SkipDisabledUsers` acts on the `AccountStatus` written by `SPSyncUserInfoList.ps1`
-1.3.3+. **Regenerate the JSON snapshot after upgrading** for the flag to take effect;
-a pre-1.3.3 snapshot carries no status, so no user is skipped as disabled until then.
-There is no behaviour change for a correctly-deployed farm when `SkipDisabledUsers`
-is left at its default `$false`.
+No configuration change is required and the output files are unchanged. Simply
+deploy the new version; the next `SPSyncUserProfile.ps1` run is faster and its log
+is far smaller, ending with the new timing summary.

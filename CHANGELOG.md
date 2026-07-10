@@ -5,6 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-07-10
+
+### Changed
+
+- **`SPSyncUserProfile.ps1` performance** (#24). The User Profile service context and `UserProfileManager` are now built **once** and reused for every user, instead of being reconstructed on every iteration inside `Add-SPSUserProfile`. On a large (~100k-user) farm the per-user reconstruction was the dominant cost of the run and drove a steady throughput decay through object churn/GC pressure. No behaviour change: the same profiles are created/updated and the same JSON/report outputs are produced.
+- The per-user transcript output is condensed from a ~14-line before/after dump to a **single status line** per user (`[UPDATE] DOMAIN\user (changed: …)`, `[CREATE]`, `[INFO]`, `[UNKNOWN_USER]`), cutting the synchronous I/O and the transcript size dramatically on large runs. (#24)
+
+### Added
+
+- `SPSyncUserProfile.ps1` prints an **end-of-run timing summary** — users processed, wall time, average ms/user, and the CREATE/UPDATE/INFO/UNKNOWN_USER breakdown — so run performance is measurable from the log. (#24)
+
 ## [1.3.3] - 2026-07-09
 
 ### Added
