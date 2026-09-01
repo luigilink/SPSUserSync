@@ -1,25 +1,23 @@
 ﻿function Import-SPSSharePointCommand {
     <#
         .SYNOPSIS
-        Loads the SharePoint command surface in a version-aware way.
+        Loads the SharePoint Subscription Edition command surface.
 
         .DESCRIPTION
-        SharePoint exposes its cmdlets differently depending on the release:
+        SharePoint Server Subscription Edition ships the `SharePointServer`
+        PowerShell module and no longer registers the legacy
+        `Microsoft.SharePoint.PowerShell` PSSnapin. This function imports that
+        module. It is idempotent: if the module is already loaded, it does nothing.
+        Running the SPSUserSync scripts through plain `powershell.exe` (e.g. a
+        scheduled task) therefore does not require launching them from the
+        SharePoint Management Shell.
 
-        - SharePoint 2013 / 2016 / 2019 ship the `Microsoft.SharePoint.PowerShell`
-          PSSnapin.
-        - SharePoint Subscription Edition ships the `SharePointServer` PowerShell
-          module instead, and no longer registers the snap-in.
+        Returns the loading mechanism used: 'SharePointServer'. Throws when
+        SharePoint is not installed on the host.
 
-        This function detects the installed product version with
-        Get-SPSInstalledProductVersion and loads the right one. It is idempotent: if
-        the snap-in or module is already loaded, it does nothing. Running the
-        SPSUserSync scripts through plain `powershell.exe` (e.g. a scheduled task)
-        therefore no longer requires launching them from the SharePoint Management
-        Shell.
-
-        Returns the loading mechanism used: 'PSSnapin' or 'SharePointServer'. Throws
-        when SharePoint is not installed on the host.
+        SharePoint Server 2016 and 2019 reached end of support on 14 July 2026 and
+        are no longer supported: use the previous major release (v1.3.4) on those
+        versions.
 
         .EXAMPLE
         Import-SPSSharePointCommand
@@ -28,23 +26,15 @@
     [OutputType([System.String])]
     param ()
 
-    $version = Get-SPSInstalledProductVersion
-    if ($null -eq $version) {
+    # Guard: Get-SPSInstalledProductVersion returns $null when SharePoint is not
+    # installed (Microsoft.SharePoint.dll not found), so fail with a clear message
+    # instead of a cryptic module-import error.
+    if ($null -eq (Get-SPSInstalledProductVersion)) {
         throw 'SharePoint is not installed on this server (Microsoft.SharePoint.dll not found). Run this on a SharePoint server.'
     }
 
-    if ($version.ProductMajorPart -eq 15 -or $version.ProductBuildPart -le 12999) {
-        # SharePoint 2013 / 2016 / 2019 -> PSSnapin
-        if ($null -eq (Get-PSSnapin -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue)) {
-            Add-PSSnapin Microsoft.SharePoint.PowerShell
-        }
-        return 'PSSnapin'
+    if (-not (Get-Module -Name SharePointServer)) {
+        Import-Module -Name SharePointServer -Verbose:$false -WarningAction SilentlyContinue -DisableNameChecking
     }
-    else {
-        # SharePoint Subscription Edition -> SharePointServer module
-        if (-not (Get-Module -Name SharePointServer)) {
-            Import-Module -Name SharePointServer -Verbose:$false -WarningAction SilentlyContinue -DisableNameChecking
-        }
-        return 'SharePointServer'
-    }
+    return 'SharePointServer'
 }

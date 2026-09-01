@@ -198,7 +198,7 @@ A `SPUser.UserLogin` referenced a domain key you have not declared. Either:
 
 ### `Get-SPSite` requires SharePoint Management Shell
 
-The two scripts depend on the `Microsoft.SharePoint.PowerShell` snap-in. The scheduled task action must run via `powershell.exe` (Windows PowerShell 5.1), not `pwsh.exe`. The snap-in is loaded automatically by the scripts when needed; no manual `Add-PSSnapin` is necessary on SharePoint 2016+.
+The two scripts depend on the SharePoint Server Subscription Edition `SharePointServer` module. The scheduled task action must run via `powershell.exe` (Windows PowerShell 5.1), not `pwsh.exe`. The module is loaded automatically by the scripts when needed; no manual `Import-Module SharePointServer` is necessary.
 
 ### `Set-SPUser -SyncFromAD` keeps failing with `Cannot get the full name or e-mail address of user`
 
