@@ -8,7 +8,9 @@
 
 **SPSUserSync** is a PowerShell toolkit to sync SharePoint Server User Information Lists and User Profiles across multi-forest Active Directory environments — an alternative to the built-in *User Profile AD Import*.
 
-Compatible with SharePoint Server **2016**, **2019**, and **Subscription Edition**.
+Compatible with **SharePoint Server Subscription Edition**.
+
+> **SharePoint Server 2016 and 2019** reached end of support on **14 July 2026** and are no longer supported. For those versions, use the previous major release ([v1.3.4](https://github.com/luigilink/SPSUserSync/releases/tag/v1.3.4)).
 
 ## Quick links
 

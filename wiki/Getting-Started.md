@@ -6,7 +6,7 @@ This page walks you through installing **SPSUserSync** and running it for the fi
 
 | Requirement | Detail |
 |---|---|
-| SharePoint Server | **2016**, **2019**, or **Subscription Edition** |
+| SharePoint Server | **Subscription Edition** (2016 and 2019 reached end of support on 14 July 2026 — use [v1.3.4](https://github.com/luigilink/SPSUserSync/releases/tag/v1.3.4) on those) |
 | PowerShell | **5.1** (Windows PowerShell) on every server in scope |
 | Privileges | The account running the scripts must be a **Farm Administrator** and member of the local **Administrators** group on the server |
 | User Profile Service | For `SPSyncUserProfile.ps1`: the account must be able to **manage profiles** on the User Profile Service Application — either the **farm account**, or an account granted **Administrator** of the UPA with the **Manage Profiles** permission (Central Administration → Manage Service Applications → *your UPA* → **Administrators**). Without it, `CreateUserProfile` / profile reads fail with *"ProfileDBCacheServiceClient.GetUserData threw exception: Access is denied."* |
@@ -74,12 +74,12 @@ cd D:\Tools\SCRIPTS\JOBS\SPSUserSync
 .\Test-SPSUserSyncReadiness.ps1
 ```
 
-It validates Administrator rights, PowerShell 5.1, the module import, the three config files and their required keys, that every `Credential` domain's DPAPI secret decrypts under the current account, that each AD domain binds over LDAP, that the SharePoint snap-in/farm are reachable, **that the current account can enumerate every site collection** (the exact permission `SPSyncUserInfoList.ps1` needs — this catches a wrong service account or a missing Shell Admin on a content database before the first run), that the `SPSUserSync` Event Log is usable, and that the master-VM share is reachable.
+It validates Administrator rights, PowerShell 5.1, the module import, the three config files and their required keys, that every `Credential` domain's DPAPI secret decrypts under the current account, that each AD domain binds over LDAP, that the SharePoint module/farm are reachable, **that the current account can enumerate every site collection** (the exact permission `SPSyncUserInfoList.ps1` needs — this catches a wrong service account or a missing Shell Admin on a content database before the first run), that the `SPSUserSync` Event Log is usable, and that the master-VM share is reachable.
 
 Useful switches:
 
 - `-SkipNetwork` — skip the LDAP bind, MySite and master-VM share checks (quick config-only pass).
-- `-SkipSharePoint` — skip the SharePoint snap-in/farm checks (validate from a workstation).
+- `-SkipSharePoint` — skip the SharePoint module/farm checks (validate from a workstation).
 
 The script prints a `PASS / WARN / FAIL / SKIP` summary and exits `1` if any check failed, `0` otherwise. Resolve every **FAIL** before enabling the scheduled tasks; **WARN** items are usually role-specific (e.g. the MySite check only matters on the UPA master server, the master-VM share only on application farms).
 
