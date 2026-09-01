@@ -18,7 +18,7 @@
       SecureString decrypts under the current account and machine.
     - That each AD domain's LDAP path builds a DirectorySearcher, and
       (unless -SkipNetwork) that an LDAP bind succeeds.
-    - That the SharePoint snap-in is available and the farm is reachable
+    - That the SharePoint module is available and the farm is reachable
       (unless -SkipSharePoint).
     - That the current account can enumerate every site collection - the exact
       permission SPSyncUserInfoList.ps1 needs. This catches a wrong service
@@ -43,7 +43,7 @@
     for a quick syntax/config-only pass from a workstation.
 
     .PARAMETER SkipSharePoint
-    Skip the SharePoint snap-in and Get-SPFarm checks. Useful when validating
+    Skip the SharePoint module and Get-SPFarm checks. Useful when validating
     the configuration off a SharePoint server.
 
     .PARAMETER SampleAccount
@@ -150,7 +150,7 @@ if ($psv.Major -eq 5) {
     Add-CheckResult -Section 'Host' -Name 'PowerShell version' -Status 'PASS' -Detail "$psv"
 }
 elseif ($psv.Major -ge 7) {
-    Add-CheckResult -Section 'Host' -Name 'PowerShell version' -Status 'WARN' -Detail "$psv detected. The SharePoint snap-in requires Windows PowerShell 5.1; run the scripts with powershell.exe, not pwsh."
+    Add-CheckResult -Section 'Host' -Name 'PowerShell version' -Status 'WARN' -Detail "$psv detected. The SharePointServer module requires Windows PowerShell 5.1; run the scripts with powershell.exe, not pwsh."
 }
 else {
     Add-CheckResult -Section 'Host' -Name 'PowerShell version' -Status 'FAIL' -Detail "$psv is not supported. Windows PowerShell 5.1 is required."
@@ -398,10 +398,7 @@ else {
     }
     else {
         $build = "$($spVersion.ProductMajorPart).$($spVersion.ProductMinorPart).$($spVersion.ProductBuildPart).$($spVersion.ProductPrivatePart)"
-        $edition = if ($spVersion.ProductMajorPart -eq 15) { 'SharePoint 2013' }
-        elseif ($spVersion.ProductBuildPart -le 12999) { 'SharePoint 2016/2019' }
-        else { 'SharePoint Subscription Edition' }
-        Add-CheckResult -Section 'SharePoint' -Name 'SharePoint installed' -Status 'PASS' -Detail "$edition (build $build)"
+        Add-CheckResult -Section 'SharePoint' -Name 'SharePoint installed' -Status 'PASS' -Detail "build $build"
 
         try {
             $loadedVia = Import-SPSSharePointCommand

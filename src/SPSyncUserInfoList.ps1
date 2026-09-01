@@ -437,8 +437,8 @@ Exception: $_
 # Rotate old logs
 Clear-SPSLogFolder -Path $ctx.LogFolder -Retention $settings.LogRetentionDays
 
-# Load the SharePoint command surface (PSSnapin on 2013/2016/2019,
-# SharePointServer module on Subscription Edition)
+# Load the SharePoint command surface (SharePointServer module,
+# Subscription Edition)
 try {
     $spLoad = Import-SPSSharePointCommand
     Write-Output "SharePoint commands loaded via: $spLoad"
